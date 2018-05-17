@@ -23,10 +23,10 @@ namespace Administrator.Services.Database.Models
         public long Count { get; set; }
 
         [Column("Punishment")]
-        public long PunishmentId
-            => (long) Punishment;
+        public long PunishmentId { get; set; }
 
         [Ignore]
-        public Punishment Punishment { get; set; }
+        public Punishment Punishment
+            => (Punishment) PunishmentId;
     }
 }

@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Metadata.Ecma335;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using Administrator.Common;
 using Administrator.Extensions;
 using Administrator.Extensions.Attributes;
 using Administrator.Services;
@@ -24,6 +26,7 @@ namespace Administrator.Modules.Administration
     }
 
     [Name("Administration")]
+    [RequireContext(ContextType.Guild)]
     public class AdministrationCommands : ModuleBase<SocketCommandContext>
     {
         private static readonly Config Config = BotConfig.New();
@@ -43,7 +46,6 @@ namespace Administrator.Modules.Administration
         [Summary("Delete messages in the current channel.")]
         [Remarks("Supply a user after the amount to prune only for a user, or \"ignore [bot/pin/me]\"")]
         [Usage("{p}prune 50", "{p}prune 25 ignore pin", "{p}prune 10 @SomeSpammer")]
-        [RequireContext(ContextType.Guild)]
         [RequireBotPermission(GuildPermission.ManageMessages)]
         [RequireUserPermission(GuildPermission.ManageMessages)]
         [Priority(1)]
@@ -73,7 +75,6 @@ namespace Administrator.Modules.Administration
         [Summary("Delete messages in the current channel.")]
         [Remarks("Supply a user after the amount to prune only for a user, or \"ignore [bot/pin/me]\"")]
         [Usage("{p}prune 50", "{p}prune 25 ignore pin", "{p}prune 10 @SomeSpammer")]
-        [RequireContext(ContextType.Guild)]
         [RequireBotPermission(GuildPermission.ManageMessages)]
         [RequireUserPermission(GuildPermission.ManageMessages)]
         [Priority(0)]
@@ -102,63 +103,6 @@ namespace Administrator.Modules.Administration
             await Context.Message.DeleteAsync().ConfigureAwait(false);
         }
 
-        /*
-        private async Task PruneMessagesAsync(int toDelete, [Remainder] params string[] args)
-        {
-            var messages = await Context.Channel.GetMessagesAsync(Context.Message, Direction.Before, toDelete + 1)
-                .FlattenAsync();
-            var cmd = await Context.Channel.GetMessageAsync(Context.Message.Id).ConfigureAwait(false);
-            var toIgnore = messages.ToList();
-            toIgnore.Add(cmd);
-            logging.AddIgnoredMessages(toIgnore);
-
-            if (args.Length == 0)
-            {
-                await (Context.Message.Channel as ITextChannel).DeleteMessagesAsync(messages).ConfigureAwait(false);
-                await cmd.DeleteAsync().ConfigureAwait(false);
-                return;
-            }
-
-            for (var i = 0; i < args.Length; i++) args[i] = args[i].ToLower();
-
-
-            if (args[0].Equals("ignore"))
-            {
-                var cond = args.TakeLast(args.Length - 2).ToList();
-                foreach (var a in args)
-                {
-                    if (a.Contains("bot")) messages = messages.Where(x => x.Author != Context.Client.CurrentUser);
-                    if (a.Contains("pin")) messages = messages.Where(x => !x.IsPinned);
-                    if (a.Contains("me")) messages = messages.Where(x => x.Author != Context.Message.Author);
-                }
-            }
-
-            await (Context.Message.Channel as ITextChannel).DeleteMessagesAsync(messages).ConfigureAwait(false);
-            await cmd.DeleteAsync().ConfigureAwait(false);
-        }
-
-        [Command("prune")]
-        [Alias("delet", "clear")]
-        [Summary("Delete messages in the current channel.")]
-        [Remarks("Supply a user after the amount to prune only for a user, or \"ignore [bot/pin/me]\"")]
-        [Usage("{p}prune 50", "{p}prune 25 ignore pin", "{p}prune 10 @SomeSpammer")]
-        [RequireContext(ContextType.Guild)]
-        [RequireBotPermission(GuildPermission.ManageMessages)]
-        [RequireUserPermission(GuildPermission.ManageMessages)]
-        [Priority(0)]
-        private async Task PruneMessagesAsync(IUser user)
-        {
-            var messages = await Context.Channel.GetMessagesAsync(Context.Message, Direction.Before).FlattenAsync();
-            var userMessages = messages.Where(x => x.Author.Id == user.Id);
-            var cmd = await Context.Channel.GetMessageAsync(Context.Message.Id).ConfigureAwait(false);
-            var toIgnore = messages.ToList();
-            toIgnore.Add(cmd);
-            logging.AddIgnoredMessages(toIgnore);
-            await (Context.Message.Channel as ITextChannel).DeleteMessagesAsync(userMessages).ConfigureAwait(false);
-            await cmd.DeleteAsync().ConfigureAwait(false);
-        }
-        */
-
         #endregion
 
         #region Warnings
@@ -169,7 +113,6 @@ namespace Administrator.Modules.Administration
         [Remarks("If a user has accumulated enough warnings, they may be punished per your {p}warnpl list.")]
         [RequireBotPermission(GuildPermission.BanMembers)]
         [RequireUserPermission(GuildPermission.BanMembers)]
-        [RequireContext(ContextType.Guild)]
         private async Task WarnUserAsync(SocketGuildUser receiver, [Remainder] string reason = "-")
         {
             if (!(Context.User is SocketGuildUser issuer)) return;
@@ -279,7 +222,6 @@ namespace Administrator.Modules.Administration
         [Remarks("If you've given more than ten warnings, supply a page number to view more.")]
         [Usage("{p}warnings @SomeIdiot", "{p}warnings")]
         [RequireUserPermission(GuildPermission.BanMembers)]
-        [RequireContext(ContextType.Guild)]
         [Priority(1)]
         private async Task GetWarningsAsync([Remainder]IUser receiver)
         {
@@ -301,7 +243,6 @@ namespace Administrator.Modules.Administration
         [Remarks("If you've given more than ten warnings, supply a page number to view more.")]
         [Usage("{p}warnings @SomeIdiot", "{p}warnings")]
         [RequireUserPermission(GuildPermission.BanMembers)]
-        [RequireContext(ContextType.Guild)]
         [Priority(0)]
         private async Task GetWarningsAsync(int page = 1)
         {
@@ -326,7 +267,6 @@ namespace Administrator.Modules.Administration
         [Summary("Clear all warnings for a specific user, or a single warning given its ID.")]
         [Usage("{p}warnclear @SomeIdiot", "{p}warnclear 3")]
         [RequireUserPermission(GuildPermission.BanMembers)]
-        [RequireContext(ContextType.Guild)]
         [Priority(1)]
         private async Task ClearWarningAsync(IUser user)
         {
@@ -346,7 +286,6 @@ namespace Administrator.Modules.Administration
         [Summary("Clear all warnings for a specific user, or a single warning given its ID.")]
         [Usage("{p}warnclear @SomeIdiot", "{p}warnclear 3")]
         [RequireUserPermission(GuildPermission.BanMembers)]
-        [RequireContext(ContextType.Guild)]
         [Priority(0)]
         private async Task ClearWarningAsync(long id)
         {
@@ -370,11 +309,11 @@ namespace Administrator.Modules.Administration
             "Set or update a warning punishment. The first argument is the number of warnings to receive the punishment, the second argument is type of punishment. Supply no type to remove the punishment for those number of warnings.")]
         [Usage("{p}warnp 3 Kick", "{p}warnp 5")]
         [RequireUserPermission(GuildPermission.BanMembers)]
-        [RequireContext(ContextType.Guild)]
         [Priority(1)]
         private async Task ModifyPunishmentAsync(long count)
         {
             var warningPunishments = await db.GetAsync<WarningPunishment>(x => x.GuildId == (long) Context.Guild.Id);
+            var gc = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
 
             if (warningPunishments.FirstOrDefault(x => x.Count == count && x.GuildId == (long) Context.Guild.Id) is WarningPunishment wp)
             {
@@ -383,6 +322,8 @@ namespace Administrator.Modules.Administration
                     .WithWarnColor()
                     .WithDescription($"I will no longer apply a punishment to users who reach **{wp.Count}** warning(s).");
                 await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
+                gc.HasModifiedWarningPunishments = true;
+                await db.UpdateAsync(gc).ConfigureAwait(false);
             }
         }
 
@@ -392,13 +333,13 @@ namespace Administrator.Modules.Administration
             "Set or update a warning punishment. The first argument is the number of warnings to receive the punishment, the second argument is type of punishment. Supply no type to remove the punishment for those number of warnings.")]
         [Usage("{p}warnp 3 Kick", "{p}warnp 5")]
         [RequireUserPermission(GuildPermission.BanMembers)]
-        [RequireContext(ContextType.Guild)]
         [Priority(0)]
         private async Task ModifyPunishmentAsync(long count, [Remainder] string type)
         {
             if (count < 1) return;
             type = type[0].ToString().ToUpper() + type.Substring(1).ToLower();
             var eb = new EmbedBuilder();
+            var gc = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
             if (Enum.TryParse(type, out Punishment punishment))
             {
                 var wps = await db
@@ -407,7 +348,7 @@ namespace Administrator.Modules.Administration
 
                 if (wps.FirstOrDefault() is WarningPunishment wp)
                 {
-                    wp.Punishment = punishment;
+                    wp.PunishmentId = (long) punishment;
                     await db.UpdateAsync(wp).ConfigureAwait(false);
                 }
                 else
@@ -416,7 +357,7 @@ namespace Administrator.Modules.Administration
                     {
                         Count = count,
                         GuildId = (long) Context.Guild.Id,
-                        Punishment = punishment
+                        PunishmentId = (long) punishment
                     };
                     await db.InsertAsync(newWp).ConfigureAwait(false);
                 }
@@ -424,6 +365,9 @@ namespace Administrator.Modules.Administration
                 eb.WithOkColor()
                     .WithDescription(
                         $"I will now apply punishment **{punishment}** to users who reach {count} warnings.");
+
+                gc.HasModifiedWarningPunishments = true;
+                await db.UpdateAsync(gc).ConfigureAwait(false);
             }
             else
             {
@@ -439,7 +383,6 @@ namespace Administrator.Modules.Administration
         [Summary("View the current warning punishments.")]
         [Usage("{p}warnpl")]
         [RequireUserPermission(GuildPermission.BanMembers)]
-        [RequireContext(ContextType.Guild)]
         private async Task ListWarningPunishmentsAsync()
         {
             var all = await db.GetAsync<WarningPunishment>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
@@ -587,7 +530,6 @@ namespace Administrator.Modules.Administration
         [Remarks("Time must be of format w/d/h/m, eg. 1w2d5h10m. All are optional, eg. 10m, 1d, 1d6h")]
         [RequireBotPermission(GuildPermission.ManageRoles)]
         [RequireUserPermission(GuildPermission.MuteMembers)]
-        [RequireContext(ContextType.Guild)]
         [Priority(2)]
         private async Task MuteUserAsync(IUser targetUser)
             => await InternalMuteAsync(targetUser, DateTimeOffset.MaxValue, "No reason specified.").ConfigureAwait(false);
@@ -598,7 +540,6 @@ namespace Administrator.Modules.Administration
         [Remarks("Time must be of format w/d/h/m, eg. 1w2d5h10m. All are optional, eg. 10m, 1d, 1d6h")]
         [RequireBotPermission(GuildPermission.ManageRoles)]
         [RequireUserPermission(GuildPermission.MuteMembers)]
-        [RequireContext(ContextType.Guild)]
         [Priority(1)]
         private async Task MuteUserAsync(IUser target, string input)
         {
@@ -683,7 +624,6 @@ namespace Administrator.Modules.Administration
         [Usage("{p}unmute @SomeGoodDude")]
         [RequireBotPermission(GuildPermission.ManageRoles)]
         [RequireUserPermission(GuildPermission.MuteMembers)]
-        [RequireContext(ContextType.Guild)]
         [Priority(1)]
         private async Task UnmuteAsync(long id)
         {
@@ -721,7 +661,6 @@ namespace Administrator.Modules.Administration
         [Usage("{p}unmute @SomeGoodDude")]
         [RequireBotPermission(GuildPermission.ManageRoles)]
         [RequireUserPermission(GuildPermission.MuteMembers)]
-        [RequireContext(ContextType.Guild)]
         [Priority(0)]
         private async Task UnmuteAsync(IUser targetUser)
         {
@@ -759,7 +698,6 @@ namespace Administrator.Modules.Administration
         [Summary("View guild user mutes. Supply a page number to view more.")]
         [Usage("{p}mutes")]
         [RequireUserPermission(GuildPermission.MuteMembers)]
-        [RequireContext(ContextType.Guild)]
         private async Task GetMutesAsync(int page = 1)
         {
             var mutes = await db.GetAsync<MutedUser>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
@@ -791,17 +729,88 @@ namespace Administrator.Modules.Administration
         #region General
 
         [Command("say")]
-        [Summary("Send a message in a specified channel using the bot.")]
+        [Summary("Send a message in a specified channel using the bot. Supports TOML embeds. Channel defaults to the current channel you are in.")]
         [Usage("{p}say #somechannel Please move the conversation to #someotherchannel.")]
-        [RequirePermissionsPass]
-        [RequireBotPermission(GuildPermission.ManageMessages)]
         [RequireUserPermission(GuildPermission.ManageMessages)]
+        [Priority(1)]
         private async Task SayAsync(IGuildChannel channel, [Remainder] string message)
         {
             if (Context.Guild.TextChannels.FirstOrDefault(x => x.Id == channel.Id) is ISocketMessageChannel chnl)
             {
-                await chnl.SendMessageAsync(message).ConfigureAwait(false);
+                try
+                {
+                    var a = TomlEmbedBuilder.ReadToml(message);
+                    if (a is TomlEmbed e)
+                    {
+                        await chnl.EmbedAsync(e).ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                    await chnl.SendMessageAsync(message).ConfigureAwait(false);
+                }
             }
+        }
+
+        [Command("say")]
+        [Summary(
+            "Send a message in a specified channel using the bot. Supports TOML embeds. Channel defaults to the current channel you are in.")]
+        [Usage("{p}say #somechannel Please move the conversation to #someotherchannel.")]
+        [RequireBotPermission(GuildPermission.ManageMessages)]
+        [RequireUserPermission(GuildPermission.ManageMessages)]
+        [Priority(0)]
+        private async Task SayAsync([Remainder] string message)
+        {
+            await SayAsync(Context.Channel as IGuildChannel, message).ConfigureAwait(false);
+
+            try
+            {
+                await Context.Message.DeleteAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                // ignored
+            }
+        }
+
+        [Command("edit")]
+        [Summary(
+            "Edit a bot message with a specific channel and message ID. Supports TOML embeds. Channel defaults to the current channel you are in.")]
+        [Usage("{p}edit #somechannel 1234567890 haha memes")]
+        [RequireUserPermission(GuildPermission.ManageMessages)]
+        [Priority(1)]
+        private async Task EditBotMessageAsync(IGuildChannel channel, ulong messageId, [Remainder] string newMessage)
+        {
+            if (!(channel is ISocketMessageChannel c && channel.Guild.Id == Context.Guild.Id)) return;
+            if (string.IsNullOrWhiteSpace(newMessage)) return;
+
+            var msg = await c.GetMessageAsync(messageId).ConfigureAwait(false);
+
+            if (msg is IUserMessage m)
+            {
+                try
+                {
+                    var a = TomlEmbedBuilder.ReadToml(newMessage);
+                    if (a is TomlEmbed e)
+                    {
+                        var toModify = e.ToMessage();
+                        await m.ModifyAsync(x =>
+                        {
+                            x.Content = toModify.Item1;
+                            x.Embed = toModify.Item2 is null ? null : toModify.Item2.Build();
+                        }).ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                    await m.ModifyAsync(x => x.Content = newMessage).ConfigureAwait(false);
+                }
+
+                await Context.Message.AddReactionAsync(new Emoji("\U00002705")).ConfigureAwait(false);
+                return;
+            }
+
+            await Context.Message.AddReactionAsync(new Emoji("\U0000274c")).ConfigureAwait(false);
         }
 
         [Command("kick")]

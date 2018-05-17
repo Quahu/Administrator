@@ -353,8 +353,9 @@ namespace Administrator.Modules.Phrases
         }
 
         [Command("phrasetop")]
-        [Summary("Show the top `x` number of phrases of length `y`. Supply no length to not filter by length.")]
-        [Usage("{p}phrasetop x y")]
+        [Summary("Show the top `x` number of phrases of length `y`. Supply no length to not filter by length. `x` is required.")]
+        [Usage("{p}phrasetop 10")]
+        [Remarks("y is automatically normalized between 1 and 20.")]
         [RequireContext(ContextType.Guild)]
         //[Ratelimit(1, 1, Measure.Minutes)]
         private async Task PhraseTopAsync(int num, int length = 0)
@@ -372,21 +373,30 @@ namespace Administrator.Modules.Phrases
             }
 
             var groups = phrases.GroupBy(p => p.UserPhraseId)
-                .OrderByDescending(g => g.Count());
+                .OrderByDescending(g => g.Count()).ToList();
+
+            if (num > groups.Count - 1)
+            {
+                num = groups.Count - 1;
+            }
+
 
             var eb = new EmbedBuilder()
                 .WithOkColor()
-                .WithTitle($"Top {num} phrases {(length > 0 ? $"(length {length})" : string.Empty)}:");
+                .WithTitle($"Top {num} phrases{(length > 0 ? $" (length {length})" : string.Empty)}:");
 
             var description = string.Empty;
             for (var i = 0; i < num; i++)
             {
-                var p = groups.Skip(i).First().First();
-                var up = userPhrases.First(x => x.Id == p.UserPhraseId);
-                var count = phrases.Count(x => x.UserPhraseId == up.Id);
-
-                description +=
-                    $"\"{up.Phrase}\" - owned by {Context.Guild.GetUser((ulong) up.UserId)} - Score: {count}\n";
+                if (groups[i].FirstOrDefault() is Phrase p
+                    && userPhrases.FirstOrDefault(x => x.Id == p.UserPhraseId) is UserPhrase up)
+                {
+                    description +=
+                        $"\"{up.Phrase}\" - owned by {Context.Guild.GetUser((ulong) up.UserId)} - Score: {phrases.Count(x => x.UserPhraseId == up.Id)}\n";
+                }
+                //var p = groups.Skip(i).First().First();
+                //var up = userPhrases.First(x => x.Id == p.UserPhraseId);
+                //var count = phrases.Count(x => x.UserPhraseId == up.Id);
             }
 
             eb.WithDescription(description);

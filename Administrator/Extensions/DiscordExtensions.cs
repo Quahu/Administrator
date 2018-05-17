@@ -29,6 +29,25 @@ namespace Administrator.Extensions
             }
         }
 
+        public static async Task SendConfirmAsync(this IMessageChannel channel, string message, TimeSpan? deleteAfter = null)
+        {
+            var msg = await channel.EmbedAsync(new EmbedBuilder().WithOkColor().WithDescription(message).Build())
+                .ConfigureAwait(false);
+
+            if (deleteAfter is TimeSpan ts)
+            {
+                try
+                {
+                    await Task.Delay(ts).ConfigureAwait(false);
+                    await msg.DeleteAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
+        }
+
         public static async Task SendErrorAsync(this IMessageChannel channel, string error, TimeSpan? deleteAfter = null)
         {
             var msg = await channel.EmbedAsync(new EmbedBuilder().WithErrorColor().WithDescription(error).Build())

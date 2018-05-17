@@ -25,9 +25,10 @@ namespace Administrator.Modules.Fun
     public class FunCommands : ModuleBase<SocketCommandContext>
     {
         private static readonly Config Config = BotConfig.New();
-        private readonly DbService db;
-        private readonly RandomService random;
-        private readonly LoggingService logging;
+        private readonly DbService _db;
+        private readonly RandomService _random;
+        private readonly LoggingService _logging;
+        private readonly CrosstalkService _crossTalk;
 
         private readonly IReadOnlyDictionary<string, EightBallOutcome> eightBallResponses = new Dictionary<string, EightBallOutcome>
         {
@@ -53,11 +54,41 @@ namespace Administrator.Modules.Fun
             {"Very doubtful", EightBallOutcome.Negative}
         };
 
-        public FunCommands(DbService db, RandomService random, LoggingService logging)
+        public FunCommands(DbService db, RandomService random, LoggingService logging, CrosstalkService crossTalk)
         {
-            this.db = db;
-            this.random = random;
-            this.logging = logging;
+            _db = db;
+            _random = random;
+            _logging = logging;
+            _crossTalk = crossTalk;
+        }
+
+        [Command("crosstalk")]
+        [Summary("Start or join a crosstalk service. Times out after 1 minute if nobody connects. Lasts 1 minute. Use the command again during a call to end it early.")]
+        [Usage("{p}crosstalk")]
+        [RequirePermissionsPass]
+        [RequireContext(ContextType.Guild)]
+        private async Task StartCrosstalkSessionAsync()
+        {
+            if (!(Context.Channel is SocketTextChannel c)) return;
+
+            if (_crossTalk.Calls.FirstOrDefault(x => x.Channel1.Id == c.Id || x.Channel2.Id == c.Id) is CrosstalkCall
+                call)
+            {
+                _crossTalk.Calls.Remove(call);
+
+                if (c.Id == call.Channel1.Id)
+                {
+                    await call.Channel2.SendConfirmAsync("The other caller hung up the crosstalk phone.").ConfigureAwait(false);
+                    await call.Channel1.SendConfirmAsync("You hung up the crosstalk phone.").ConfigureAwait(false);
+                    return;
+                }
+
+                await call.Channel1.SendConfirmAsync("The other caller hung up the crosstalk phone.").ConfigureAwait(false);
+                await call.Channel2.SendConfirmAsync("You hung up the crosstalk phone.").ConfigureAwait(false);
+                return;
+            }
+
+            await _crossTalk.AddChannelAsync(c).ConfigureAwait(false);
         }
 
         //[Ratelimit(1, 2, Measure.Minutes)]
@@ -93,7 +124,7 @@ namespace Administrator.Modules.Fun
                 eb.WithDescription(input);
             }
 
-            logging.AddIgnoredMessages(new List<IMessage> {Context.Message});
+            _logging.AddIgnoredMessages(new List<IMessage> {Context.Message});
             try
             {
                 if (Context.Message.MentionedUsers.Count < 1)
@@ -106,7 +137,7 @@ namespace Administrator.Modules.Fun
                 // ignored
             }
             var msg = await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
-            var guildConfig = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var guildConfig = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
 
             await msg.AddReactionAsync(DiscordExtensions.GetEmote(guildConfig.UpvoteArrow)).ConfigureAwait(false);
             await msg.AddReactionAsync(DiscordExtensions.GetEmote(guildConfig.DownvoteArrow)).ConfigureAwait(false);
@@ -136,7 +167,7 @@ namespace Administrator.Modules.Fun
                         {
                             total += 0;
                         }
-                        else total += random.Next(1, numSides);
+                        else total += _random.Next(1, numSides);
                     }
                 }
                 else if (uint.TryParse(section.Trim(), out var num))
@@ -183,7 +214,7 @@ namespace Administrator.Modules.Fun
 
             await Context.Channel.EmbedAsync(new EmbedBuilder()
                 .WithOkColor()
-                .WithDescription($":thinking: I choose...**{options[random.Next(0, (uint) options.Count - 1)]}**!")
+                .WithDescription($":thinking: I choose...**{options[_random.Next(0, (uint) options.Count - 1)]}**!")
                 .Build()).ConfigureAwait(false);
         }
 
@@ -249,7 +280,7 @@ namespace Administrator.Modules.Fun
         private async Task Ask8BallAsync([Remainder] string question)
         {
             if (string.IsNullOrWhiteSpace(question)) return;
-            var response = eightBallResponses.Keys.ToList()[random.Next(0, (uint) eightBallResponses.Keys.Count() - 1)];
+            var response = eightBallResponses.Keys.ToList()[_random.Next(0, (uint) eightBallResponses.Keys.Count() - 1)];
 
             if (Context.Message.MentionedUsers.Any())
             {

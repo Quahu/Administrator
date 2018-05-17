@@ -22,7 +22,7 @@ namespace Administrator.Modules.Utility.Services
             client.ReactionAdded += HandleReactionAsync;
         }
 
-        public async Task AddNewAsync(IUserMessage message, IUser author)
+        public async Task AddNewAsync(IUserMessage message, SocketGuildUser author)
         {
             var guild = await db.GetOrCreateGuildConfigAsync((message.Channel as SocketGuildChannel).Guild)
                 .ConfigureAwait(false);
@@ -35,6 +35,7 @@ namespace Administrator.Modules.Utility.Services
                 MessageId = (long) message.Id,
                 UserId = (long) author.Id,
                 Content = message.Embeds.FirstOrDefault()?.Description,
+                GuildId = (long) author.Guild.Id,
                 ImageUrl = message.Embeds.FirstOrDefault()?.Image.GetValueOrDefault().Url ?? string.Empty
             };
 

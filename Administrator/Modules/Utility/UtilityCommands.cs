@@ -45,11 +45,11 @@ namespace Administrator.Modules.Utility
 
         [Command("lookingtoplay")]
         [Alias("ltp")]
-        [Summary("Toggle \"Looking to Play\" status on yourself. This role is mentionable and lasts as long as you specify (default 1 hour)." +
+        [Summary("Toggle \"Looking to Play\" status on yourself. This role is mentionable and lasts as long as you specify (defaults to the guild's maximum allowed time)." +
                "\nTo remove the role from yourself early, simply use the command again.")]
         [Usage("{p}ltp")]
         [RequireContext(ContextType.Guild)]
-        private async Task ToggleLtpAsync(long hours = 1)
+        private async Task ToggleLtpAsync(long hours = 0)
         {
             var eb = new EmbedBuilder();
             var ltpUsers = await db.GetAsync<LtpUser>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
@@ -60,15 +60,13 @@ namespace Administrator.Modules.Utility
                 var _ = Context.Channel.SendErrorAsync($"Please enter a number {gc.LookingToPlayMaxHours} or smaller.")
                     .ConfigureAwait(false);
             }
-            else if (hours < 1)
+            else if (hours < 1 && gc.LookingToPlayMaxHours != default)
             {
-                var _ = Context.Channel.SendErrorAsync(
-                        $"Please enter a number 1 or greater and {gc.LookingToPlayMaxHours} or smaller.")
-                    .ConfigureAwait(false);
+                hours = gc.LookingToPlayMaxHours;
             }
             if (!(Context.Guild.Roles.FirstOrDefault(r => r.Id == (ulong) gc.LookingToPlayRole) is SocketRole ltpRole))
             {
-                var _ = Context.Channel.SendErrorAsync("Seems the owner hasn't set up the Looking to Play role. Go yell at him.", TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                var _ = Context.Channel.SendErrorAsync("Seems the Looking to Play role hasn't been set up. Try asking a member with the bot's perm role.", TimeSpan.FromSeconds(10)).ConfigureAwait(false);
             }
             else if (ltpUsers.FirstOrDefault(u => u.UserId == (long) Context.User.Id && u.GuildId == (long) Context.Guild.Id) is LtpUser ltpUser)
             {
@@ -91,7 +89,7 @@ namespace Administrator.Modules.Utility
                 {
                     UserId = (long) Context.User.Id,
                     GuildId = (long) Context.Guild.Id,
-                    Expires = DateTimeOffset.UtcNow + TimeSpan.FromHours(hours)
+                    Expires = hours < 1 ? DateTimeOffset.MaxValue : DateTimeOffset.UtcNow + TimeSpan.FromHours(hours)
                 };
 
                 await db.InsertAsync(ltp).ConfigureAwait(false);
@@ -338,7 +336,7 @@ namespace Administrator.Modules.Utility
                 channel = Context.Guild.GetChannel(channelId) as ISocketMessageChannel;
 
             var msg = await channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
-            await suggestions.AddNewAsync(msg, Context.Message.Author).ConfigureAwait(false);
+            await suggestions.AddNewAsync(msg, Context.User as SocketGuildUser).ConfigureAwait(false);
             logging.AddIgnoredMessages(new List<IMessage> {msg});
             await Context.Message.DeleteAsync().ConfigureAwait(false);
 

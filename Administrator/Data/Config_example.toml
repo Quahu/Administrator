@@ -1,6 +1,6 @@
 BotToken = ""
 BotPrefix = "!!"
-OwnerIds = [ 0 ]
+OwnerIds = [ 167452465317281793 ]
 
 [Db]
 Location = "Data/Administrator.db"

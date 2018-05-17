@@ -57,6 +57,7 @@ namespace Administrator
                 .AddSingleton(logging)
                 .AddSingleton(random)
                 .AddSingleton(interactive)
+                .AddSingleton(new CrosstalkService())
                 .AddSingleton(stats)
                 .AddSingleton(reaction)
                 .BuildServiceProvider();

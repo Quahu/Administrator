@@ -33,8 +33,10 @@ namespace Administrator.Extensions.Attributes
                 return PreconditionResult.FromError("Guild has not set up permrole.");
             }
 
-            if (context.Message.Author is SocketGuildUser user)
-                return user.Roles.Contains(permRole) ? PreconditionResult.FromSuccess() : PreconditionResult.FromError("User does not have permrole.");
+            if (context.User is SocketGuildUser user)
+                return user.Roles.Any(x => x.Id == permRole.Id)
+                    ? PreconditionResult.FromSuccess()
+                    : PreconditionResult.FromError("User does not have permrole.");
 
             return PreconditionResult.FromError("Internal error. Please report this.");
         }

@@ -50,19 +50,19 @@ namespace Administrator.Services.Database
                     {
                         GuildId = (long) guild.Id,
                         Count = 2,
-                        Punishment = Punishment.Mute
+                        PunishmentId = (long) Punishment.Mute
                     });
                     newWarningPunishments.Add(new WarningPunishment
                     {
                         GuildId = (long) guild.Id,
                         Count = 3,
-                        Punishment = Punishment.Softban
+                        PunishmentId = (long) Punishment.Softban
                     });
                     newWarningPunishments.Add(new WarningPunishment
                     {
                         GuildId = (long) guild.Id,
                         Count = 5,
-                        Punishment = Punishment.Ban
+                        PunishmentId = (long) Punishment.Ban
                     });
                     gc.HasModifiedWarningPunishments = true;
                     await UpdateAsync(gc).ConfigureAwait(false);

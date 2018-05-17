@@ -16,8 +16,6 @@ namespace Administrator.Services
 
         public string BotPrefix { get; private set; }
         
-        public string SteamApiKey { get; private set; }
-
         public List<long> OwnerIds { get; private set; }
 
         public Db Db { get; private set; }

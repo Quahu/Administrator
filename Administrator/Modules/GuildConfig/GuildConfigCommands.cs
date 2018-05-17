@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using Administrator.Common;
 using Administrator.Extensions;
 using Administrator.Extensions.Attributes;
 using Administrator.Services;
@@ -15,6 +18,7 @@ using Nett;
 namespace Administrator.Modules.GuildConfig
 {
     [Name("GuildConfig")]
+    [RequireContext(ContextType.Guild)]
     public class GuildConfigCommands : ModuleBase<SocketCommandContext>
     {
         private static readonly Config Config = BotConfig.New();
@@ -26,50 +30,470 @@ namespace Administrator.Modules.GuildConfig
         }
 
         [Command("permrole")]
-        [Alias("pr")]
+        [Summary("Gets or sets this guild's permrole. The permrole is needed for many administrative commands.\nSetting the permrole requires **Administrator** permissions.")]
         [Usage("{p}permrole Admin")]
-        [Summary("Gets or sets permission role for this guild.")]
         [RequireContext(ContextType.Guild)]
-        //[RequireUserPermission(GuildPermission.Administrator)]
-        private async Task GetSetPermRoleAsync([Remainder] string roleName = null)
+        private async Task GetOrSetPermRoleAsync([Remainder] string role = null)
         {
-            var eb = new EmbedBuilder();
-            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
             if (!(Context.User is SocketGuildUser user)) return;
-            if (string.IsNullOrWhiteSpace(roleName)
-                && Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) gc.PermRole) is SocketRole r)
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(role))
             {
-                eb.WithOkColor()
-                    .WithDescription($"Permrole on this server is {r.Name}");
-            }
-            else if (!user.GuildPermissions.Administrator)
-            {
-                eb.WithErrorColor()
-                    .WithDescription(
-                        "You don't have permission to do that. Contact a user with Administrator guild permissions.");
-            }
-            else if (Context.Guild.Roles.OrderByDescending(x => x.Position)
-                    .FirstOrDefault(x => x.Name.Equals(roleName, StringComparison.InvariantCultureIgnoreCase))
-                is SocketRole newPermRole)
-            {
-                gc.PermRole = (long) newPermRole.Id;
-                await _db.UpdateAsync(gc).ConfigureAwait(false);
-                eb.WithOkColor()
-                    .WithDescription($"Guild permission role has been updated to role **{newPermRole.Name}**.");
-            }
-            else
-            {
-                eb.WithErrorColor()
-                    .WithDescription("Could not find a role matching that name.");
+                if (Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) gc.PermRole) is SocketRole r)
+                {
+                    await Context.Channel.SendConfirmAsync($"This guild's permrole is currently set to role **{r.Name}** (`{r.Id}`).")
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                await Context.Channel.SendErrorAsync("This guild's permrole is currently not set, or was deleted.")
+                    .ConfigureAwait(false);
+                return;
             }
 
-            await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
+            if (user.Roles.All(x => !x.Permissions.Administrator))
+            {
+                await Context.Channel
+                    .SendErrorAsync("You must have **Administrator** permissions to set your guild's permrole!")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (Context.Guild.Roles.FirstOrDefault(x =>
+                x.Name.Equals(role, StringComparison.InvariantCultureIgnoreCase)
+                || ulong.TryParse(role, out var result) && x.Id == result) is SocketRole ro)
+            {
+                gc.PermRole = (long) ro.Id;
+                await _db.UpdateAsync(gc).ConfigureAwait(false);
+                await Context.Channel
+                    .SendConfirmAsync($"This guild's permrole has been set to role **{ro.Name}** (`{ro.Id}`).")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            await Context.Channel.SendErrorAsync("Could not find a role by that name or ID to set as the permrole.")
+                .ConfigureAwait(false);
+        }
+
+        [Command("muterole")]
+        [Summary(
+            "Gets or sets this guild's mute role. Users who are muted with {p}mute will have this role applied to them.")]
+        [Usage("{p}muterole Silenced")]
+        [Remarks(
+            "Note: When you set the mute role, overwrite permissions will automatically be applied to every channel on this guild, preventing that role from sending messages, speaking, or adding reactions.")]
+        [RequirePermRole]
+        [RequireContext(ContextType.Guild)]
+        private async Task GetOrSetMuteRoleAsync([Remainder] string role = null)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(role))
+            {
+                if (Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) gc.MuteRole) is SocketRole r)
+                {
+                    await Context.Channel
+                        .SendConfirmAsync($"This guild's mute role is currently set to role **{r.Name}** (`{r.Id}`).")
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                await Context.Channel.SendErrorAsync("This guild's mute role is currently not set, or was deleted.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (Context.Guild.Roles.FirstOrDefault(x =>
+                x.Name.Equals(role, StringComparison.InvariantCultureIgnoreCase)
+                || ulong.TryParse(role, out var result) && x.Id == result) is SocketRole ro)
+            {
+                gc.MuteRole = (long) ro.Id;
+                await _db.UpdateAsync(gc).ConfigureAwait(false);
+                await Context.Channel
+                    .SendConfirmAsync($"This guild's mute role has been set to role **{ro.Name}** (`{ro.Id}`).")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            await Context.Channel.SendErrorAsync("Could not find a role by that name or ID to set as the mute role.")
+                .ConfigureAwait(false);
+        }
+
+        [Command("lookingtoplayrole")]
+        [Alias("ltprole")]
+        [Summary("Gets or sets this guild's looking to play role. Users who use {p}ltp will gain this role.")]
+        [Usage("{p}ltprole Looking to Play")]
+        [Remarks("To modify the number of hours this role lasts, utilize the {p}ltphours command.")]
+        [RequirePermRole]
+        [RequireContext(ContextType.Guild)]
+        private async Task GetOrSetLtpRoleAsync([Remainder] string role = null)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(role))
+            {
+                if (Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) gc.LookingToPlayRole) is SocketRole r)
+                {
+                    await Context.Channel
+                        .SendConfirmAsync($"This guild's looking to play role is currently set to role **{r.Name}** (`{r.Id}`).")
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                await Context.Channel.SendErrorAsync("This guild's looking to play role is currently not set, or was deleted.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (Context.Guild.Roles.FirstOrDefault(x =>
+                x.Name.Equals(role, StringComparison.InvariantCultureIgnoreCase)
+                || ulong.TryParse(role, out var result) && x.Id == result) is SocketRole ro)
+            {
+                gc.LookingToPlayRole = (long) ro.Id;
+                await _db.UpdateAsync(gc).ConfigureAwait(false);
+                await Context.Channel
+                    .SendConfirmAsync($"This guild's looking to play role has been set to role **{ro.Name}** (`{ro.Id}`).")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            await Context.Channel.SendErrorAsync("Could not find a role by that name or ID to set as the looking to play role.")
+                .ConfigureAwait(false);
+        }
+
+        [Command("lookingtoplayhours")]
+        [Alias("ltphours")]
+        [Summary(
+            "Gets or sets this guild's maximum looking to play hours. To disable, simply supply a 0 for the timeout.")]
+        [Usage("{p}ltphours 6")]
+        [Remarks("Note: by default, the looking to play role does not expire (defaults to 0).")]
+        [RequirePermRole]
+        [RequireContext(ContextType.Guild)]
+        private async Task GetOrSetLtpHours(long hours = long.MinValue)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (hours == long.MinValue || hours == gc.LookingToPlayMaxHours)
+            {
+                await Context.Channel
+                    .SendConfirmAsync(
+                        $"This guild's looking to play timeout is currently {(gc.LookingToPlayMaxHours == 0 ? "disabled (set to 0)." : $"set to {gc.LookingToPlayMaxHours} hour(s).")}")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (hours < 0)
+            {
+                await Context.Channel
+                    .SendErrorAsync("Please supply a non-negative number for the maximum hours, or 0 to disable it.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            gc.LookingToPlayMaxHours = hours;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+            await Context.Channel
+                .SendConfirmAsync(
+                    $"This guild's looking to play timeout has been {(hours == 0 ? "disabled." : $"set to {hours} hours.")}")
+                .ConfigureAwait(false);
+        }
+
+        [Command("upvotearrow")]
+        [Summary(
+            "Gets or sets this guild's upvote arrow. Suggestions and the {p}vote command utilize this emote. Defaults to ⬆.⬇")]
+        [Usage("{p}upvotearrow ⬆")]
+        [RequirePermRole]
+        [RequireContext(ContextType.Guild)]
+        private async Task GetOrSetUpvoteArrowAsync(string emoteStr)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(emoteStr) || emoteStr.Equals(gc.UpvoteArrow, StringComparison.InvariantCultureIgnoreCase))
+            {
+                await Context.Channel
+                    .SendConfirmAsync($"This guild's upvote arrow is currently set to {gc.UpvoteArrow}.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            var emote = Emote.TryParse(emoteStr, out var result) ? result : (IEmote) new Emoji(emoteStr);
+
+            try
+            {
+                await Context.Message.AddReactionAsync(emote).ConfigureAwait(false);
+                gc.UpvoteArrow = emote.ToString();
+                await _db.UpdateAsync(gc).ConfigureAwait(false);
+                await Context.Channel.SendConfirmAsync($"This guild's upvote arrow has been set to {emote}.")
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                await Context.Channel
+                    .SendErrorAsync("Could not set this guild's upvote arrow - either the input emote was malformed or I do not have access to use it.")
+                    .ConfigureAwait(false);
+                throw new ArgumentException("Could not parse upvote arrow emote.");
+            }
+        }
+
+        [Command("downvotearrow")]
+        [Summary("Gets or sets this guild's upvote arrow. Suggestions and the {p} vote command utilize this emote. Defaults to .")]
+        [Usage("{p}downvote arrow ")]
+        [RequirePermRole]
+        [RequireContext(ContextType.Guild)]
+        private async Task GetOrSetDownvoteArrowAsync(string emoteStr)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(emoteStr) || emoteStr.Equals(gc.DownvoteArrow, StringComparison.InvariantCultureIgnoreCase))
+            {
+                await Context.Channel
+                    .SendConfirmAsync($"This guild's downvote arrow is currently set to {gc.DownvoteArrow}.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            var emote = Emote.TryParse(emoteStr, out var result) ? result : (IEmote) new Emoji(emoteStr);
+
+            try
+            {
+                await Context.Message.AddReactionAsync(emote).ConfigureAwait(false);
+                gc.DownvoteArrow = emote.ToString();
+                await _db.UpdateAsync(gc).ConfigureAwait(false);
+                await Context.Channel.SendConfirmAsync($"This guild's downvote arrow has been set to {emote}.")
+                    .ConfigureAwait(false);
+            }
+            catch
+            {
+                await Context.Channel
+                    .SendErrorAsync("Could not set this guild's downvote arrow - either the input emote was malformed or I do not have access to use it.")
+                    .ConfigureAwait(false);
+                throw new ArgumentException("Could not parse downvote arrow emote.");
+            }
+        }
+
+        [Command("verboseerrors")]
+        [Alias("ve")]
+        [Summary(
+            "Gets or sets this guild's error display mode.\n`true` will show all command errors except \"Unknown command.\".\n`false` will only show pre-defined errors from within the command.")]
+        [Usage("{p}ve true")]
+        [Remarks("This setting defaults to false.")]
+        [RequirePermRole]
+        [RequireContext(ContextType.Guild)]
+        private async Task GetOrSetVerboseErrorsAsync(bool? flag = null)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (flag is null || flag == gc.VerboseErrors)
+            {
+                await Context.Channel
+                    .SendConfirmAsync(
+                        $"This guild is currently configured to {(gc.VerboseErrors ? string.Empty : "not ")}display verbose errors.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            gc.VerboseErrors = (bool) flag;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+            await Context.Channel
+                .SendConfirmAsync(
+                    $"This guild has been configured to {(flag.Value ? string.Empty : "not ")}display verbose errors.")
+                .ConfigureAwait(false);
+        }
+
+        [Command("greetusers")]
+        [Summary("Gets or sets this guild's greeting mode.\n`true` will greet users if the guild has its greeting channel set up.\n`false` will disable greeting users.")]
+        [Usage("{p}greetusers true")]
+        [RequirePermRole]
+        [RequireContext(ContextType.Guild)]
+        private async Task GetOrSetGreetingModeAsync(bool? flag = null)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (flag is null || flag == gc.GreetUserOnJoin)
+            {
+                await Context.Channel
+                    .SendConfirmAsync(
+                        $"This guild is currently configured to {(gc.GreetUserOnJoin ? string.Empty : "not ")}greet users on joining.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            gc.GreetUserOnJoin = (bool) flag;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+            await Context.Channel
+                .SendConfirmAsync(
+                    $"This guild has been configured to {(flag.Value ? string.Empty : "not ")}greet users on joining.")
+                .ConfigureAwait(false);
+        }
+
+        [Command("greetmessage")]
+        [Alias("greetmsg")]
+        [Summary("Gets or sets this guild's greet message. Supports TOML embeds.\n" +
+                 "You may use `{user}` to mention the user you are greeting.")]
+        [Usage("{p}greetmsg Welcome to the server, {user}!")]
+        [RequirePermRole]
+        [RequireContext(ContextType.Guild)]
+        private async Task GetOrSetGreetMessageAsync([Remainder] string greetMsgOrEmbed = null)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(greetMsgOrEmbed))
+            {
+                try
+                {
+                    var a = TomlEmbedBuilder.ReadToml(gc.GreetMessage.Replace("{user}", Context.User.Mention).Trim());
+                    if (a is TomlEmbed e)
+                    {
+                        await Context.Channel.EmbedAsync(e).ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                    await Context.Channel.SendMessageAsync(gc.GreetMessage.Replace("{user}", Context.User.Mention)).ConfigureAwait(false);
+                }
+
+                return;
+            }
+
+            gc.GreetMessage = greetMsgOrEmbed;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+
+            await Context.Channel
+                .SendConfirmAsync(
+                    $"This guild's greet message has been updated. Use `{Config.BotPrefix}greetmsg` to view it.")
+                .ConfigureAwait(false);
+        }
+
+        [Command("greettimeout")]
+        [Summary(
+            "Gets or sets this guild's greeting timeout, in seconds. The greeting message will be automatically deleted after that many seconds.\nSet to 0 to disable.")]
+        [Usage("{p}greetseconds 60")]
+        [RequirePermRole]
+        private async Task GetOrSetGreetTimeoutAsync(long seconds = long.MinValue)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (seconds == long.MinValue || seconds == gc.GreetTimeout)
+            {
+                await Context.Channel
+                    .SendConfirmAsync(
+                        $"This guild's greeting timeout is currently {(gc.GreetTimeout == 0 ? "disabled." : $"set to {gc.GreetTimeout} seconds.")}")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (seconds < 0)
+            {
+                await Context.Channel
+                    .SendErrorAsync("Please supply a non-negative number for the timeout, or 0 to disable.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            gc.GreetTimeout = seconds;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+
+            await Context.Channel
+                .SendConfirmAsync(
+                    $"This guild's greeting timeout has been {(seconds == 0 ? "disabled." : $"set to {seconds} seconds.")}")
+                .ConfigureAwait(false);
+        }
+
+        [Command("enablerespects")]
+        [Summary("Gets or sets this guild's respects functionality. Sending `F` in any channel will increment a respects counter, once per day per user.\n" +
+                 "`true` enables this functionality.\n" +
+                 "`false` disables it.")]
+        [Usage("{p}enablerespects true")]
+        [RequirePermRole]
+        private async Task GetOrSetRespectsAsync(bool? flag = null)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (flag is null || flag == gc.EnableRespects)
+            {
+                await Context.Channel
+                    .SendConfirmAsync(
+                        $"This guild's respects counter is currently {(gc.GreetUserOnJoin ? "enabled" : "disabled")}.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            gc.EnableRespects = (bool) flag;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+            await Context.Channel
+                .SendConfirmAsync(
+                    $"This guild's respects counter has been {(gc.GreetUserOnJoin ? "enabled" : "disabled")}.")
+                .ConfigureAwait(false);
+        }
+
+        [Command("invitefiltering")]
+        [Summary("Gets or sets this guild's invite filtering functionality. Any discord invite links posted that are not invites to this guild will be filtered by the bot and deleted.\n" +
+                 "`true` enables this functionality.\n" +
+                 "`false` disables it.")]
+        [Usage("{p}invitefiltering true")]
+        [Remarks("Note: This bot requires ManageGuild permissions to access invites to grant itself a \"whitelist\". Otherwise, it will delete all invites, not just external ones.")]
+        [RequirePermRole]
+        private async Task GetOrSetInviteFilteringAsync(bool? flag = null)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (flag is null || flag == gc.EnableRespects)
+            {
+                await Context.Channel
+                    .SendConfirmAsync(
+                        $"Invite filtering on this guild is currently {(gc.GreetUserOnJoin ? "enabled" : "disabled")}.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            gc.EnableRespects = (bool) flag;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+            await Context.Channel
+                .SendConfirmAsync(
+                    $"Invite filtering on this guild has been {(gc.GreetUserOnJoin ? "enabled" : "disabled")}.")
+                .ConfigureAwait(false);
+        }
+
+        [Command("phraseminimumlength")]
+        [Alias("phraseminlength", "pml")]
+        [Summary("Gets or sets this guild's minimum phrase length, in characters. Phrases **shorter** than this number will not be created. Set to 0 to disable.")]
+        [Usage("{p}phraseminlength 3")]
+        [RequirePermRole]
+        private async Task GetOrSetPhraseMinLengthAsync(long length = long.MinValue)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (length == long.MinValue || length == gc.PhraseMinLength)
+            {
+                await Context.Channel
+                    .SendConfirmAsync(
+                        $"This guild's minimum phrase length is currently set to {gc.PhraseMinLength} characters.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (length < 0)
+            {
+                await Context.Channel
+                    .SendErrorAsync(
+                        "Please supply a non-negative number for minimum phrase length, or 0 to disable it.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            gc.PhraseMinLength = length;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+
+            await Context.Channel
+                .SendConfirmAsync($"This guild's minimum phrase length has been set to {length} characters.")
+                .ConfigureAwait(false);
         }
 
         [Command("showguildconfig")]
         [Alias("showgc", "sgc")]
-        [Summary("Displays bot configuration for this guild.")]
+        [Summary("Displays all bot configuration settings for this guild.")]
         [Usage("{p}showguildconfig")]
+        [Remarks("Note: to view the greet message, use {p}greetmsg.")]
         [RequirePermRole]
         [RequireContext(ContextType.Guild)]
         private async Task ShowGuildConfigAsync()
@@ -78,31 +502,22 @@ namespace Administrator.Modules.GuildConfig
 
             var eb = new EmbedBuilder()
                 .WithOkColor()
-                /*
-                .WithAuthor(new EmbedAuthorBuilder
-                {
-                    IconUrl = Context.Guild.IconUrl,
-                    Name = $"Bot configuration for {Context.Guild.Name}"
-                })
-                */
                 .WithTitle($"Bot configuration for {Context.Guild.Name}")
                 .WithThumbnailUrl(Context.Guild.IconUrl)
                 .WithDescription(
-                    $"**LogChannel**: {(gc.LogChannel == default ? "Not set" : Context.Guild.TextChannels.FirstOrDefault(x => x.Id == (ulong) gc.LogChannel)?.Mention)}\n" +
-                    $"**SuggestionChannel**: {(gc.SuggestionChannel == default ? "Not set" : Context.Guild.TextChannels.FirstOrDefault(x => x.Id == (ulong) gc.SuggestionChannel)?.Mention)}\n" +
-                    $"**SuggestionArchive**: {(gc.SuggestionArchive == default ? "Not set" : Context.Guild.TextChannels.FirstOrDefault(x => x.Id == (ulong) gc.SuggestionArchive)?.Mention)}\n" +
-                    $"**GreetChannel**: {(gc.GreetChannel == default ? "Not set" : Context.Guild.TextChannels.FirstOrDefault(x => x.Id == (ulong) gc.GreetChannel)?.Mention)}\n\n" +
-                    $"**PermRole**: {(Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) gc.PermRole) is SocketRole permRole ? permRole.Name : "Not set")}\n" +
-                    $"**MuteRole**: {(Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) gc.MuteRole) is SocketRole muteRole ? muteRole.Name : "Not set")}\n" +
-                    $"**LookingToPlayRole**: {(Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) gc.LookingToPlayRole) is SocketRole ltpRole ? ltpRole.Name : "Not set")}\n" +
+                    $"**LogChannel**: {(gc.LogChannel == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.LogChannel)?.Mention)}\n" +
+                    $"**SuggestionChannel**: {(gc.SuggestionChannel == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.SuggestionChannel)?.Mention)}\n" +
+                    $"**SuggestionArchive**: {(gc.SuggestionArchive == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.SuggestionArchive)?.Mention)}\n" +
+                    $"**GreetChannel**: {(gc.GreetChannel == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.GreetChannel)?.Mention)}\n\n" +
+                    $"**PermRole**: {(Context.Guild.GetRole((ulong) gc.PermRole) is SocketRole permRole ? permRole.Name : "Not set")}\n" +
+                    $"**MuteRole**: {(Context.Guild.GetRole((ulong) gc.MuteRole) is SocketRole muteRole ? muteRole.Name : "Not set")}\n" +
+                    $"**LookingToPlayRole**: {(Context.Guild.GetRole((ulong) gc.LookingToPlayRole) is SocketRole ltpRole ? ltpRole.Name : "Not set")}\n" +
                     $"**LookingToPlayMaxHours**: {(gc.LookingToPlayMaxHours == default ? "None" : $"{gc.LookingToPlayMaxHours} hours")}\n\n" +
                     $"**UpvoteArrow**: {gc.UpvoteArrow}\n" +
                     $"**DownvoteArrow**: {gc.DownvoteArrow}\n\n" +
                     $"**VerboseErrors**: {gc.VerboseErrors}\n" +
                     $"**GreetUserOnJoin**: {gc.GreetUserOnJoin}\n" +
-                    $"**MentionUserOnJoin**: {gc.MentionUserOnJoin}\n" + 
-                    $"**GreetMessage**: \"{gc.GreetMessage}\"\n" +
-                    $"**GreetTimeout**: {(gc.GreetTimeout == default ? "None" : $"{gc.GreetTimeout} seconds")}\n" + 
+                    $"**GreetTimeout**: {(gc.GreetTimeout == default ? "Disabled" : $"{gc.GreetTimeout} seconds")}\n" + 
                     $"**EnableRespects**: {gc.EnableRespects}\n" +
                     $"**InviteFiltering**: {gc.InviteFiltering}\n" +
                     $"**PhraseMinLength**: {gc.PhraseMinLength} characters");
@@ -110,309 +525,145 @@ namespace Administrator.Modules.GuildConfig
             await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
         }
 
-        [Command("modifyguildconfig")]
-        [Alias("modifygc", "mgc")]
-        [Summary("Modify your guild's bot configuration.")]
-        [Usage("{p}mgc MuteRole Silenced", "{p}mgc LogChannel #logs")]
+        [Command("logchannel")]
+        [Summary("Get or set this guild's log channel. User leave/join/ban/unban/kick and message deletions will be logged to this channel.")]
+        [Usage("{p}logchannel #logs")]
         [RequirePermRole]
         [RequireContext(ContextType.Guild)]
-        private async Task ModifyGuildConfigAsync(string property, [Remainder] string value)
+        private async Task GetOrSetLogChannelAsync(IGuildChannel channel = null)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
-            var eb = new EmbedBuilder();
-            var prop = string.Empty;
-            var val = string.Empty;
 
-            switch (property.ToLower())
+            if (channel is null)
             {
-                case "logchannel":
-                    if (Context.Guild.TryParseTextChannel(value, out var logChannel))
-                    {
-                        gc.LogChannel = (long) logChannel.Id;
-                        prop = "LogChannel";
-                        val = logChannel.Mention;
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Could not find a valid text channel for that input.")
-                            .ConfigureAwait(false);
-                    } 
-
-                    break;
-                case "suggestionchannel":
-                    if (Context.Guild.TryParseTextChannel(value, out var suggestionChannel))
-                    {
-                        gc.SuggestionChannel = (long) suggestionChannel.Id;
-                        prop = "SuggestionChannel";
-                        val = suggestionChannel.Mention;
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Could not find a valid text channel for that input.")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "muterole":
-                    if (Context.Guild.Roles.FirstOrDefault(x =>
-                        x.Name.Equals(value, StringComparison.InvariantCultureIgnoreCase)) is SocketRole muteRole)
-                    {
-                        gc.MuteRole = (long) muteRole.Id;
-                        prop = "MuteRole";
-                        val = muteRole.Name;
-                        var textperms = new OverwritePermissions(sendMessages: PermValue.Deny, addReactions: PermValue.Deny);
-                        var voiceperms = new OverwritePermissions(speak: PermValue.Deny);
-
-                        Parallel.ForEach(Context.Guild.TextChannels,
-                            async channel =>
-                                await channel.AddPermissionOverwriteAsync(muteRole, textperms).ConfigureAwait(false));
-
-                        Parallel.ForEach(Context.Guild.VoiceChannels,
-                            async channel =>
-                                await channel.AddPermissionOverwriteAsync(muteRole, voiceperms).ConfigureAwait(false));
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Could not find a role name matching that input.")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "lookingtoplayrole":
-                    if (Context.Guild.Roles.FirstOrDefault(x =>
-                        x.Name.Equals(value, StringComparison.InvariantCultureIgnoreCase)) is SocketRole ltpRole)
-                    {
-                        gc.LookingToPlayRole = (long) ltpRole.Id;
-                        prop = "LookingToPlayRole";
-                        val = ltpRole.Name;
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Could not find a role name matching that input.")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "lookingtoplaymaxhours":
-                    if (ulong.TryParse(value, out var ltpTimeout))
-                    {
-                        gc.LookingToPlayMaxHours = (long) ltpTimeout;
-                        prop = "LookingToPlayMaxHours";
-                        val = ltpTimeout.ToString();
-                    }
-                    else
-                    {
-                        await Context.Channel
-                            .SendErrorAsync("Value must be a non-negative integer.")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "mentionltpusers":
-                    if (bool.TryParse(value, out var mentionLtpUsers))
-                    {
-                        gc.MentionLtpUsers = mentionLtpUsers;
-                        prop = "MentionLtpUsers";
-                        val = mentionLtpUsers.ToString();
-                        if (Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) gc.LookingToPlayRole) is SocketRole ltp
-                            && !ltp.IsMentionable)
-                        {
-                            await ltp.ModifyAsync(x => x.Mentionable = true).ConfigureAwait(false);
-                        }
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Value must be a boolean (`true` or `false`)")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "suggestionarchive":
-                    if (Context.Guild.TryParseTextChannel(value, out var suggestionArchive))
-                    {
-                        gc.SuggestionArchive = (long) suggestionArchive.Id;
-                        prop = "SuggestionArchive";
-                        val = suggestionArchive.Mention;
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Could not find a valid text channel for that input.")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "greetchannel":
-                    if (Context.Guild.TryParseTextChannel(value, out var greetChannel))
-                    {
-                        gc.GreetChannel = (long) greetChannel.Id;
-                        prop = "GreetChannel";
-                        val = greetChannel.Mention;
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Could not find a valid text channel for that input.")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "upvotearrow":
-                    gc.UpvoteArrow = value;
-                    prop = "UpvoteArrow";;
-                    val = value +
-                          "\n(note, if this doesn't look correct, the bot may not be on the guild this emote is on.)";
-                    break;
-                case "downvotearrow":
-                    gc.DownvoteArrow = value;
-                    prop = "DownvoteArrow";;
-                    val = value +
-                          "\n(note, if this doesn't look correct, the bot may not be on the guild this emote is on.)";
-                    break;
-                case "verboseerrors":
-                    if (bool.TryParse(value, out var verboseErrors))
-                    {
-                        gc.VerboseErrors = verboseErrors;
-                        prop = "VerboseErrors";
-                        val = verboseErrors.ToString();
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Value must be a boolean (`true` or `false`)")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "greetuseronjoin":
-                    if (bool.TryParse(value, out var greetUserOnJoin))
-                    {
-                        gc.GreetUserOnJoin = greetUserOnJoin;
-                        prop = "GreetUserOnJoin";
-                        val = greetUserOnJoin.ToString();
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Value must be a boolean (`true` or `false`)")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "mentionuseronjoin":
-                    if (bool.TryParse(value, out var mentionUserOnJoin))
-                    {
-                        gc.MentionUserOnJoin = mentionUserOnJoin;
-                        prop = "MentionUserOnJoin";
-                        val = mentionUserOnJoin.ToString();
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Value must be a boolean (`true` or `false`)")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "greetmessage":
-                    if (!string.IsNullOrWhiteSpace(value))
-                    {
-                        gc.GreetMessage = value;
-                        prop = "GreetMessage";
-                        val = value;
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Value must not be null or empty space.")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "greettimeout":
-                    if (ulong.TryParse(value, out var greetTimeout))
-                    {
-                        gc.GreetTimeout = (long) greetTimeout;
-                        prop = "GreetTimeout";
-                        val = greetTimeout + " seconds";
-                    }
-                    else
-                    {
-                        await Context.Channel
-                            .SendErrorAsync("Value must be a non-negative integer.")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "enablerespects":
-                    if (bool.TryParse(value, out var enableRespects))
-                    {
-                        gc.EnableRespects = enableRespects;
-                        prop = "EnableRespects";
-                        val = enableRespects.ToString();
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Value must be a boolean (`true` or `false`)")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "invitefiltering":
-                    if (bool.TryParse(value, out var inviteFiltering))
-                    {
-                        gc.InviteFiltering = inviteFiltering;
-                        prop = "InviteFiltering";
-                        val = inviteFiltering.ToString();
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Value must be a boolean (`true` or `false`)")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                case "phraseminlength":
-                    if (ulong.TryParse(value, out var phraseMinLength)
-                        && phraseMinLength > 0)
-                    {
-                        gc.PhraseMinLength = (long) phraseMinLength;
-                        prop = "PhraseMinLength";
-                        val = $"{phraseMinLength} character(s)";
-                    }
-                    else
-                    {
-                        await Context.Channel.SendErrorAsync("Value must be a non-negative integer greater than 0.")
-                            .ConfigureAwait(false);
-                    }
-
-                    break;
-                default:
+                if (Context.Guild.GetTextChannel((ulong) gc.LogChannel) is SocketTextChannel ch)
+                {
                     await Context.Channel
-                        .SendErrorAsync(
-                            $"Property not found with that id. Use `{Config.BotPrefix}sgc` to view valid properties.")
+                        .SendConfirmAsync($"This guild's log channel is currently set to channel {ch.Mention} (`{ch.Id}`)")
                         .ConfigureAwait(false);
                     return;
+                }
+
+                await Context.Channel
+                    .SendErrorAsync("This guild's log channel is currently not set, or was deleted.")
+                    .ConfigureAwait(false);
+                return;
             }
 
-            eb.WithOkColor()
-                .WithDescription($"Set property **{prop}** to value {val}");
+            if (channel.Guild.Id != Context.Guild.Id || !(channel is SocketTextChannel c)) return;
+
+            gc.LogChannel = (long) c.Id;
             await _db.UpdateAsync(gc).ConfigureAwait(false);
-            await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
+
+            await Context.Channel
+                .SendConfirmAsync($"This guild's log channel has been set to channel {c.Mention} (`{c.Id}`)")
+                .ConfigureAwait(false);
         }
 
-        [Command("testgreet")]
-        [Summary("Test the bot's greeting functionality in the current channel.")]
-        [Usage("{p}testgreet")]
+        [Command("suggestionchannel")]
+        [Summary("Get or set this guild's suggestion channel. Users who suggest with {p}suggest will have their suggestions posted to this channel.")]
+        [Usage("{p}suggestionchannel #suggestions")]
         [RequirePermRole]
         [RequireContext(ContextType.Guild)]
-        private async Task TestGreetAsync()
+        private async Task GetOrSetSuggestionChannelAsync(IGuildChannel channel = null)
         {
-            if (!(Context.User is SocketGuildUser user)) return;
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
-            var eb = new EmbedBuilder()
-                .WithOkColor()
-                .WithTitle($"Welcome to {user.Guild.Name}, {user}!")
-                .WithThumbnailUrl(user.AvatarUrl())
-                .WithDescription(gc.GreetMessage.Replace("{user}", user.Mention));
-            //"Please be sure to carefully read over our rules, and feel free to add a reaction to the message above to add some class roles to yourself!\nEnjoy your stay!");
-            await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
 
-            //var _ = Context.Channel.SendMessageAsync(gc.MentionUserOnJoin ? user.Mention : string.Empty, TimeSpan.FromSeconds(gc.GreetTimeout), embed: eb.Build()).ConfigureAwait(false);
+            if (channel is null)
+            {
+                if (Context.Guild.GetTextChannel((ulong) gc.LogChannel) is SocketTextChannel ch)
+                {
+                    await Context.Channel
+                        .SendConfirmAsync($"This guild's suggestion channel is currently set to channel {ch.Mention} (`{ch.Id}`)")
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                await Context.Channel
+                    .SendErrorAsync("This guild's suggestion channel is currently not set, or was deleted.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (channel.Guild.Id != Context.Guild.Id || !(channel is SocketTextChannel c)) return;
+
+            gc.SuggestionChannel = (long) c.Id;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+
+            await Context.Channel
+                .SendConfirmAsync($"This guild's suggestion channel has been set to channel {c.Mention} (`{c.Id}`)")
+                .ConfigureAwait(false);
+        }
+
+        [Command("suggestionarchive")]
+        [Summary("Get or set this guild's suggestion archive channel. Approved or denied suggestions will be posted to this channel.")]
+        [Usage("{p}suggestionarchive #suggestionarchive")]
+        [Remarks("Note: if you do not set a suggestion archive channel, the !!suggestion command will not function.")]
+        [RequirePermRole]
+        [RequireContext(ContextType.Guild)]
+        private async Task GetOrSetSuggestionArchiveAsync(IGuildChannel channel = null)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (channel is null)
+            {
+                if (Context.Guild.GetTextChannel((ulong) gc.LogChannel) is SocketTextChannel ch)
+                {
+                    await Context.Channel
+                        .SendConfirmAsync($"This guild's suggestion archive channel is currently set to channel {ch.Mention} (`{ch.Id}`)")
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                await Context.Channel
+                    .SendErrorAsync("This guild's suggestion archive channel is currently not set, or was deleted.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (channel.Guild.Id != Context.Guild.Id || !(channel is SocketTextChannel c)) return;
+
+            gc.SuggestionArchive = (long) c.Id;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+
+            await Context.Channel
+                .SendConfirmAsync($"This guild's suggestion archive channel has been set to channel {c.Mention} (`{c.Id}`)")
+                .ConfigureAwait(false);
+        }
+
+        [Command("greetchannel")]
+        [Summary("Get or set this guild's greeting channel. Users who join will trigger a greeting message.")]
+        [Usage("{p}greetchannel #welcome")]
+        [RequirePermRole]
+        [RequireContext(ContextType.Guild)]
+        private async Task GetOrSetGreetChannelAsync(IGuildChannel channel = null)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (channel is null)
+            {
+                if (Context.Guild.GetTextChannel((ulong) gc.LogChannel) is SocketTextChannel ch)
+                {
+                    await Context.Channel
+                        .SendConfirmAsync($"This guild's greet channel is currently set to channel {ch.Mention} (`{ch.Id}`)")
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                await Context.Channel
+                    .SendErrorAsync("This guild's greet channel is currently not set, or was deleted.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (channel.Guild.Id != Context.Guild.Id || !(channel is SocketTextChannel c)) return;
+
+            gc.GreetChannel = (long) c.Id;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+
+            await Context.Channel
+                .SendConfirmAsync($"This guild's greet channel has been set to channel {c.Mention} (`{c.Id}`)")
+                .ConfigureAwait(false);
         }
     }
 }

@@ -10,26 +10,96 @@ using System.Linq;
 using System.Threading.Tasks;
 using Administrator.Services.Database.Models;
 using Discord.Commands;
+using Administrator.Common;
+using Discord.Rest;
 
 namespace Administrator.Services
 {
     public class LoggingService
     {
+        private static readonly Config Config = BotConfig.New();
         private static readonly Logger Log = LogManager.GetCurrentClassLogger();
         private readonly List<IMessage> _toIgnore = new List<IMessage>();
         private readonly DbService _db;
+        private readonly DiscordSocketClient _client;
 
-        public LoggingService(BaseSocketClient client, DbService db, CommandService commands)
+        public LoggingService(DiscordSocketClient client, DbService db, CommandService commands)
         {
             _db = db;
+            _client = client;
 
-            client.UserJoined += OnUserJoined;
-            client.MessageDeleted += OnMessageDeleted;
-            client.UserBanned += OnUserBanned;
-            client.UserUnbanned += OnUserUnbanned;
-            client.UserLeft += OnUserLeft;
-            client.Log += LogMessage;
+            _client.UserJoined += OnUserJoined;
+            _client.MessageDeleted += OnMessageDeleted;
+            _client.UserBanned += OnUserBanned;
+            _client.UserUnbanned += OnUserUnbanned;
+            _client.UserLeft += OnUserLeft;
+            _client.Log += LogMessage;
+            _client.MessageUpdated += OnMessageUpdated;
+            _client.JoinedGuild += OnGuildJoin;
             commands.Log += LogMessage;
+        }
+
+        private async Task OnGuildJoin(SocketGuild guild)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(guild).ConfigureAwait(false);
+            var eb = new EmbedBuilder()
+                .WithOkColor()
+                .WithThumbnailUrl(_client.CurrentUser.AvatarUrl())
+                .WithTitle("Thanks for inviting me!")
+                .WithDescription(
+                    $"I am the Administrator. I'm an all-purpose bot with some neat features, dare I say. If you would like some help to see what I can do, utilize the `{Config.BotPrefix}help` command.");
+
+            if (guild.Roles.All(x => x.Id != (ulong) gc.PermRole))
+            {
+                try
+                {
+                    var role = guild.Roles.FirstOrDefault(x => x.Name.Equals($"{guild.Name} Permrole")) ??
+                                       (IRole) await guild.CreateRoleAsync($"{guild.Name} Permrole", GuildPermissions.None)
+                                           .ConfigureAwait(false);
+                    gc.PermRole = (long) role.Id;
+                    await _db.UpdateAsync(gc).ConfigureAwait(false);
+                    eb.Description +=
+                        $"\nTo use my commands which require my permrole, give yourself or other admins the **{role.Name}** role.";
+                }
+                catch
+                {
+                    eb.AddField("⚠ Sorry, but I could not automatically create a permrole for you to use.",
+                        "I may not have the proper permissions. I require **ManageRoles** perms to be able to perform tasks like assigning the mute role and looking to play role(s).\n" +
+                        $"You will have to manually set it using `{Config.BotPrefix}permrole`.\nSee `{Config.BotPrefix}help permrole` for info on how to set it.");
+                }
+            }
+
+            if (guild.TextChannels
+                .Where(c => guild.CurrentUser.GetPermissions(c).SendMessages)
+                .OrderBy(c => c.Position).FirstOrDefault() is SocketTextChannel ch)
+            {
+                await ch.EmbedAsync(eb.Build()).ConfigureAwait(false);
+            }
+        }
+
+        private async Task OnMessageUpdated(Cacheable<IMessage, ulong> oldMessage, SocketMessage newMessage, ISocketMessageChannel channel)
+        {
+            if (!(newMessage is SocketUserMessage msg)
+                || !(msg.Channel is SocketGuildChannel chnl)) return;
+
+            var blws = await _db.GetAsync<BlacklistedWord>(x => x.GuildId == (long) chnl.Guild.Id)
+                .ConfigureAwait(false);
+
+            if (blws.Any(x => msg.Content.ToLower().Contains(x.Word.ToLower())))
+            {
+                var gc = await _db.GetOrCreateGuildConfigAsync(chnl.Guild).ConfigureAwait(false);
+                if (msg.Author is SocketGuildUser u && u.Roles.All(x => x.Id != (ulong) gc.PermRole))
+                {
+                    try
+                    {
+                        await msg.DeleteAsync().ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // ignored
+                    }
+                }
+            }
         }
 
         public void AddIgnoredMessages(IEnumerable<IMessage> messages)
@@ -277,17 +347,21 @@ namespace Administrator.Services
             }
 
             if (user.Guild.TryGetChannelId(guildConfig.GreetChannel.ToString(), out var welcomeChannelId)
-                && guildConfig.GreetUserOnJoin)
+                && guildConfig.GreetUserOnJoin
+                && user.Guild.GetChannel(welcomeChannelId) is ISocketMessageChannel chnl)
             {
-                var channel = user.Guild.GetChannel(welcomeChannelId) as ISocketMessageChannel;
-                var eb = new EmbedBuilder()
-                    .WithOkColor()
-                    .WithTitle($"Welcome to {user.Guild.Name}, {user}!")
-                    .WithThumbnailUrl(user.AvatarUrl())
-                    .WithDescription(guildConfig.GreetMessage.Replace("{user}", user.Mention));
-                        //"Please be sure to carefully read over our rules, and feel free to add a reaction to the message above to add some class roles to yourself!\nEnjoy your stay!");
-
-                var _ = channel.SendMessageAsync(guildConfig.MentionUserOnJoin ? user.Mention : string.Empty, TimeSpan.FromSeconds(guildConfig.GreetTimeout), embed: eb.Build()).ConfigureAwait(false);
+                try
+                {
+                    var a = TomlEmbedBuilder.ReadToml(guildConfig.GreetMessage.Replace("{user}", user.Mention));
+                    if (a is TomlEmbed e)
+                    {
+                        var _1 = chnl.EmbedAsync(e, TimeSpan.FromSeconds(guildConfig.GreetTimeout)).ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                    var _2 = chnl.SendMessageAsync(guildConfig.GreetMessage.Replace("{user}", user.Mention), TimeSpan.FromSeconds(guildConfig.GreetTimeout)).ConfigureAwait(false);
+                }
             }
         }
     }

@@ -71,6 +71,7 @@ namespace Administrator.Modules.Permissions
 
         private async Task InternalAddPermissionAsync(string cmd, string type, long id)
         {
+            type = type[0].ToString().ToUpper() + type.Substring(1).ToLower();
             if (Enum.TryParse(type, out PermissionType t))
             {
                 var perm = new Permission

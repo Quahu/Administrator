@@ -44,9 +44,9 @@ namespace Administrator.Services.Database.Models
 
         public bool GreetUserOnJoin { get; set; }
 
-        public bool MentionUserOnJoin { get; set; } = true;
+        //public bool MentionUserOnJoin { get; set; } = true;
 
-        public string GreetMessage { get; set; } = "Welcome to the server!";
+        public string GreetMessage { get; set; } = "Welcome to the server, {user}!";
 
         public long GreetTimeout { get; set; } = 60;
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -22,7 +23,9 @@ namespace Administrator
         private readonly CommandService _commands;
         private readonly DbService _db;
         private readonly StatsService _stats;
+        private readonly CrosstalkService _crosstalk;
         private readonly IServiceProvider _services;
+        private readonly Dictionary<ValueTuple<SocketTextChannel, SocketTextChannel>, DateTimeOffset> _callMessages;
 
         public CommandHandler(IServiceProvider services)
         {
@@ -30,11 +33,13 @@ namespace Administrator
             _commands = services.GetService(typeof(CommandService)) as CommandService;
             _db = services.GetService(typeof(DbService)) as DbService;
             _stats = services.GetService(typeof(StatsService)) as StatsService;
+            _crosstalk = services.GetService(typeof(CrosstalkService)) as CrosstalkService;
             _services = services;
+            _callMessages = new Dictionary<(SocketTextChannel, SocketTextChannel), DateTimeOffset>();
             if (_client != null) _client.MessageReceived += HandleAsync;
         }
 
-        private async Task HandleAsync(SocketMessage message)
+        public async Task HandleAsync(SocketMessage message)
         {
             var watch = Stopwatch.StartNew();
             _stats.MessagesReceived++;
@@ -51,17 +56,18 @@ namespace Administrator
                 && msg.Channel is SocketGuildChannel c
                 && blws.Any(x => x.GuildId == (long) c.Guild.Id && msg.Content.ToLower().Contains(x.Word.ToLower())))
             {
-                try
+                var gc = await _db.GetOrCreateGuildConfigAsync(c.Guild).ConfigureAwait(false);
+                if (msg.Author is SocketGuildUser u && u.Roles.All(x => x.Id != (ulong) gc.PermRole))
                 {
-                    var gc = await _db.GetOrCreateGuildConfigAsync(c.Guild).ConfigureAwait(false);
-                    if (msg.Author is SocketGuildUser u && u.Roles.All(x => x.Id != (ulong) gc.PermRole))
+                    try
                     {
                         await msg.DeleteAsync().ConfigureAwait(false);
                     }
-                }
-                catch
-                {
-                    // ignored
+                    catch
+                    {
+                        // ignored
+                    }
+                    return;
                 }
             }
 
@@ -83,6 +89,21 @@ namespace Administrator
                 catch
                 {
                     // ignored
+                }
+
+                // check for active calls
+                if (msg.Channel is SocketTextChannel ch && _crosstalk.Calls.FirstOrDefault(x => x.Channel1.Id == ch.Id || x.Channel2.Id == ch.Id) is
+                    CrosstalkCall call)
+                {
+                    if (call.Channel1.Id == channel.Id)
+                    {
+                        await call.Channel2.SendMessageAsync($"**{msg.Author.Username}**: {msg.Content.SanitizeMentions()}")
+                            .ConfigureAwait(false);
+                        return;
+                    }
+
+                    await call.Channel1.SendMessageAsync($"**{msg.Author.Username}**: {msg.Content.SanitizeMentions()}")
+                        .ConfigureAwait(false);
                 }
 
                 // check and increment phrases
