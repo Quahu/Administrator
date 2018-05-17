@@ -329,5 +329,6 @@ ASALocalRun/
 # MFractors (Xamarin productivity tool) working folder 
 .mfractor/
 
-# Config file, to be sure to not expose tokens
+# Config file and database
 *Config.toml
+*.db
