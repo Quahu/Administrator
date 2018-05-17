@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Administrator.Extensions;
 using Administrator.Extensions.Attributes;
@@ -14,14 +15,23 @@ using Discord.WebSocket;
 namespace Administrator.Modules.Phrases
 {
     [Name("Phrase")]
+    [RequireContext(ContextType.Guild)]
+    [RequirePermissionsPass]
     public class PhraseCommands : ModuleBase<SocketCommandContext>
     {
         private static readonly Config Config = BotConfig.New();
+        private static bool wasCreated;
+        private static List<ulong> isRemoving;
         private readonly DbService db;
 
         public PhraseCommands(DbService db)
         {
             this.db = db;
+
+            if (wasCreated) return;
+
+            isRemoving = new List<ulong>();
+            wasCreated = true;
         }
 
         [Command("addphrase")]
@@ -29,11 +39,16 @@ namespace Administrator.Modules.Phrases
         [Summary("Create your own personal phrase. Supply the `-u` flag to only make unique occurrences increment the counter.")]
         [Remarks("Phrase must not contain a word or words in use by another phrase.")]
         [Usage("{p}addphrase nice meme", "{p}addphrase -u unique phrase")]
-        [RequireContext(ContextType.Guild)]
-        [RequirePermissionsPass]
-        //[Ratelimit(1, 0.5, Measure.Minutes)]
         private async Task AddUserPhraseAsync([Remainder] string phrase)
         {
+            if (isRemoving.Any(x => x == Context.User.Id))
+            {
+                await Context.Channel
+                    .SendErrorAsync("You are currently in the middle of removing your phrase. Please wait.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(phrase)) return;
             phrase = phrase.ToLower();
 
@@ -94,25 +109,17 @@ namespace Administrator.Modules.Phrases
         [Summary("Remove your set phrase.")]
         [Usage("{p}remphrase")]
         [Remarks("Moderators can remove others phrases by mentioning them after the command.")]
-        [RequireContext(ContextType.Guild)]
         [Priority(1)]
-        [RequirePermissionsPass]
-        //[Ratelimit(1, 0.5, Measure.Minutes)]
         private async Task RemoveUserPhraseAsync()
-        {
-            await RemoveUserPhraseAsync(Context.Message.Author).ConfigureAwait(false);
-        }
+            => await RemoveUserPhraseAsync(Context.User).ConfigureAwait(false);
 
         [Command("removephrase", RunMode = RunMode.Async)]
         [Alias("remphrase")]
         [Summary("Remove your set phrase.")]
         [Usage("{p}remphrase")]
         [Remarks("Moderators can remove others phrases by mentioning them after the command.")]
-        [RequireContext(ContextType.Guild)]
         [RequireUserPermission(GuildPermission.ManageMessages)]
         [Priority(0)]
-        [RequirePermissionsPass]
-        //[Ratelimit(1, 0.5, Measure.Minutes)]
         private async Task RemoveUserPhraseAsync([Remainder] IUser target)
         {
             var userPhrases = await db.GetAsync<UserPhrase>(x => x.GuildId == (long) Context.Guild.Id && x.UserId == (long) target.Id).ConfigureAwait(false);
@@ -129,11 +136,13 @@ namespace Administrator.Modules.Phrases
 
             eb.WithOkColor()
                 .WithDescription("Removing all instances of this phrase. Please wait.");
+            isRemoving.Add(target.Id);
             var msg = await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
 
             var ebComplete = new EmbedBuilder();
             await db.DeleteAsync(up).ConfigureAwait(false);
             userPhrases = await db.GetAsync<UserPhrase>(x => x.GuildId == (long) Context.Guild.Id && x.UserId == (long) target.Id).ConfigureAwait(false);
+
             if (userPhrases.Any())
             {
                 ebComplete.WithErrorColor()
@@ -143,7 +152,9 @@ namespace Administrator.Modules.Phrases
             {
                 ebComplete.WithOkColor()
                     .WithDescription("Phrase successfully removed.");
-            } 
+            }
+
+            isRemoving.Remove(target.Id);
 
             await msg.ModifyAsync(x => x.Embed = ebComplete.Build()).ConfigureAwait(false);
         }
@@ -153,8 +164,7 @@ namespace Administrator.Modules.Phrases
         [Summary("Add a specific phrase to the guild's phrase blacklist.\n" +
                  "Supply the `-c` flag to prevent any phrases containing the supplied text from being created.\n" +
                  "Supply no arguments to view the current blacklist for this guild.")]
-        [Usage("{p}pbl -c the", "{p}pbl fuck")]
-        [RequireContext(ContextType.Guild)]
+        [Usage("{p}pbl -c the", "{p}pbl poop")]
         [RequirePermRole]
         [Priority(1)]
         private async Task BlacklistPhraseAsync()
@@ -184,7 +194,6 @@ namespace Administrator.Modules.Phrases
                  "Supply the `-c` flag to prevent any phrases containing the supplied text from being created.\n" +
                  "Supply no arguments to view the current blacklist for this guild.")]
         [Usage("{p}pbl -c the", "{p}pbl fuck")]
-        [RequireContext(ContextType.Guild)]
         [RequirePermRole]
         [Priority(0)]
         private async Task BlacklistPhraseAsync(params string[] input)
@@ -217,12 +226,10 @@ namespace Administrator.Modules.Phrases
             await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
         }
 
-        
         [Command("removephraseblacklist")]
         [Alias("rpbl")]
         [Summary("Remove a phrase blacklist entry by ID.")]
         [Usage("{p}rpbl 5")]
-        [RequireContext(ContextType.Guild)]
         [RequirePermRole]
         private async Task RemoveBlacklistedPhraseAsync(long id)
         {
@@ -247,9 +254,6 @@ namespace Administrator.Modules.Phrases
         [Summary("Show stats for a user's phrase.")]
         [Usage("{p}phrase", "{p}phrase @SomeOtherUser")]
         [Remarks("Supply a target to see that user's phrase. Defaults to yourself.")]
-        [RequireContext(ContextType.Guild)]
-        [RequirePermissionsPass]
-        //[Ratelimit(1, 0.5, Measure.Minutes)]
         private async Task GetPhraseAsync([Remainder]IUser target = null)
         {
             target = target ?? Context.Message.Author;
@@ -353,18 +357,14 @@ namespace Administrator.Modules.Phrases
         }
 
         [Command("phrasetop")]
-        [Summary("Show the top `x` number of phrases of length `y`. Supply no length to not filter by length. `x` is required.")]
-        [Usage("{p}phrasetop 10")]
-        [Remarks("y is automatically normalized between 1 and 20.")]
-        [RequireContext(ContextType.Guild)]
-        //[Ratelimit(1, 1, Measure.Minutes)]
-        private async Task PhraseTopAsync(int num, int length = 0)
+        [Summary("Show the top 10 phrases of length `y`. Supply no length to not filter by length.\n" +
+                 "You may also supply a `-e` or `-m` flag to display only emotes or mentions.")]
+        [Usage("{p}phrasetop", "{p}phrasetop 5")]
+        [Priority(1)]
+        private async Task PhraseTopAsync(int length = 0)
         {
             var userPhrases = await db.GetAsync<UserPhrase>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
             var phrases = await db.GetAsync<Phrase>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
-
-            if (num < 1) num = 1;
-            if (num > 20) num = 20;
 
             if (length > 0)
             {
@@ -375,11 +375,7 @@ namespace Administrator.Modules.Phrases
             var groups = phrases.GroupBy(p => p.UserPhraseId)
                 .OrderByDescending(g => g.Count()).ToList();
 
-            if (num > groups.Count - 1)
-            {
-                num = groups.Count - 1;
-            }
-
+            var num = groups.Count < 10 ? groups.Count : 10;
 
             var eb = new EmbedBuilder()
                 .WithOkColor()
@@ -404,14 +400,56 @@ namespace Administrator.Modules.Phrases
             await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
         }
 
+        [Command("phrasetop")]
+        private async Task PhraseTopAsync(string filter)
+        {
+
+            var userPhrases = await db.GetAsync<UserPhrase>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
+            var phrases = await db.GetAsync<Phrase>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
+            var eb = new EmbedBuilder()
+                .WithOkColor();
+
+            switch (filter)
+            {
+                case "-m":
+                    userPhrases = userPhrases.Where(x => Regex.IsMatch(x.Phrase, @"[^<>]")).ToList();
+                    eb.WithTitle($"Top {(userPhrases.Count < 10 ? userPhrases.Count : 10)} phrases with mentions:");
+                    break;
+                case "-e":
+                    userPhrases = userPhrases.Where(x => Regex.IsMatch(x.Phrase, @"\p{Cs}") || Emote.TryParse(x.Phrase, out _)).ToList();
+                    eb.WithTitle($"Top {(userPhrases.Count < 10 ? userPhrases.Count : 10)} emote phrases:");
+                    break;
+            }
+
+            phrases = phrases.Where(x => userPhrases.Select(y => y.Id).Contains(x.UserPhraseId)).ToList();
+
+
+            var groups = phrases.GroupBy(p => p.UserPhraseId)
+                .OrderByDescending(g => g.Count()).ToList();
+
+            var description = string.Empty;
+            for (var i = 0; i < (userPhrases.Count < 10 ? userPhrases.Count : 10); i++)
+            {
+                if (groups[i].FirstOrDefault() is Phrase p
+                    && userPhrases.FirstOrDefault(x => x.Id == p.UserPhraseId) is UserPhrase up)
+                {
+                    description +=
+                        $"**{i + 1}**. \"{up.Phrase}\" - owned by {Context.Guild.GetUser((ulong) up.UserId)} - Score: {phrases.Count(x => x.UserPhraseId == up.Id)}\n";
+                }
+                //var p = groups.Skip(i).First().First();
+                //var up = userPhrases.First(x => x.Id == p.UserPhraseId);
+                //var count = phrases.Count(x => x.UserPhraseId == up.Id);
+            }
+
+            eb.WithDescription(description);
+
+            await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
+        }
 
         [Command("searchphrase")]
         [Alias("sphrase")]
         [Summary("Search for phrases using a given keyword.")]
         [Usage("{p}sphrase nice meme")]
-        [RequireContext(ContextType.Guild)]
-        [RequirePermissionsPass]
-        //[Ratelimit(1, 0.5, Measure.Minutes)]
         private async Task SearchPhraseAsync([Remainder] string query)
         {
             var eb = new EmbedBuilder()

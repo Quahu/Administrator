@@ -55,5 +55,7 @@ namespace Administrator.Services.Database.Models
         public bool InviteFiltering { get; set; }
 
         public long PhraseMinLength { get; set; } = 3;
+
+        public string InviteCode { get; set; } = string.Empty;
     }
 }

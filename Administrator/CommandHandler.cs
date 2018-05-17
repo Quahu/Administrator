@@ -39,7 +39,7 @@ namespace Administrator
             if (_client != null) _client.MessageReceived += HandleAsync;
         }
 
-        public async Task HandleAsync(SocketMessage message)
+        private async Task HandleAsync(SocketMessage message)
         {
             var watch = Stopwatch.StartNew();
             _stats.MessagesReceived++;
@@ -74,74 +74,94 @@ namespace Administrator
             var argPos = 0;
             if (!msg.HasStringPrefix(Config.BotPrefix, ref argPos))
             {
-                if (!(msg.Channel is SocketGuildChannel channel)) return;
-                var gc = await _db.GetOrCreateGuildConfigAsync(channel.Guild).ConfigureAwait(false);
-
-                // check for invites to filter
-                try
+                _ = Task.Run(async () =>
                 {
-                    var invites = await channel.Guild.GetInvitesAsync().ConfigureAwait(false);
-                    if (gc.InviteFiltering && Regex.IsMatch(msg.Content, pattern) && !invites.Any(i => msg.Content.Contains(i.Code)))
+                    if (!(msg.Channel is SocketGuildChannel channel)) return;
+                    var gc = await _db.GetOrCreateGuildConfigAsync(channel.Guild).ConfigureAwait(false);
+
+                    // check for invites to filter
+                    try
                     {
-                        await msg.DeleteAsync().ConfigureAwait(false);
-                    }      
-                }
-                catch
-                {
-                    // ignored
-                }
-
-                // check for active calls
-                if (msg.Channel is SocketTextChannel ch && _crosstalk.Calls.FirstOrDefault(x => x.Channel1.Id == ch.Id || x.Channel2.Id == ch.Id) is
-                    CrosstalkCall call)
-                {
-                    if (call.Channel1.Id == channel.Id)
-                    {
-                        await call.Channel2.SendMessageAsync($"**{msg.Author.Username}**: {msg.Content.SanitizeMentions()}")
-                            .ConfigureAwait(false);
-                        return;
-                    }
-
-                    await call.Channel1.SendMessageAsync($"**{msg.Author.Username}**: {msg.Content.SanitizeMentions()}")
-                        .ConfigureAwait(false);
-                }
-
-                // check and increment phrases
-                var userPhrases = await _db.GetAsync<UserPhrase>(x => x.GuildId == (long) channel.Guild.Id).ConfigureAwait(false);
-                if (userPhrases.FirstOrDefault(x => msg.Content.ContainsWord(x.Phrase)) is UserPhrase up)
-                {
-                    var phrases = await _db.GetAsync<Phrase>(x => x.UserPhraseId == up.Id).ConfigureAwait(false);
-                    if (phrases.All(x => DateTimeOffset.UtcNow - x.Timestamp >= TimeSpan.FromSeconds(5)))
-                    {
-                        var phrase = new Phrase
+                        var invites = await channel.Guild.GetInvitesAsync().ConfigureAwait(false);
+                        if (gc.InviteFiltering && Regex.IsMatch(msg.Content, pattern) &&
+                            !invites.Any(i => msg.Content.Contains(i.Code)))
                         {
-                            GuildId = up.GuildId,
-                            ChannelId = (long) msg.Channel.Id,
-                            UserId = (long) msg.Author.Id,
-                            UserPhraseId = up.Id
-                        };
-                        await _db.InsertAsync(phrase).ConfigureAwait(false);
+                            await msg.DeleteAsync().ConfigureAwait(false);
+                        }
                     }
-                }
+                    catch
+                    {
+                        // ignored
+                    }
 
-                if (!gc.EnableRespects || msg.Content != "F") return;
+                    // check for active calls
+                    if (msg.Channel is SocketTextChannel ch &&
+                        _crosstalk.Calls.FirstOrDefault(x => x.Channel1.Id == ch.Id || x.Channel2.Id == ch.Id) is
+                            CrosstalkCall call)
+                    {
+                        if (call.Channel1.Id == channel.Id)
+                        {
+                            await call.Channel2
+                                .SendMessageAsync($"**{msg.Author.Username}**: {msg.Content.SanitizeMentions()}")
+                                .ConfigureAwait(false);
+                            return;
+                        }
 
-                var respects = await _db.GetAsync<Respects>(x => x.GuildId == (long) channel.Guild.Id && x.Timestamp.Day == DateTimeOffset.UtcNow.Day).ConfigureAwait(false);
-                if (respects.Any(x => x.UserId == (long) msg.Author.Id)) return;
+                        await call.Channel1
+                            .SendMessageAsync($"**{msg.Author.Username}**: {msg.Content.SanitizeMentions()}")
+                            .ConfigureAwait(false);
+                    }
 
-                var r = new Respects
-                {
-                    GuildId = (long) channel.Guild.Id,
-                    UserId = (long) msg.Author.Id
-                };
-                await _db.InsertAsync(r).ConfigureAwait(false);
-                var eb = new EmbedBuilder()
-                    .WithOkColor()
-                    .WithDescription(
-                        $"**{msg.Author}** has paid their respects ({respects.Count(x => x.Timestamp.Day == DateTimeOffset.UtcNow.Day) + 1} today).")
-                    .WithFooter($"{respects.Count + 1} total respects paid.");
+                    // check and increment phrases
+                    var userPhrases = await _db.GetAsync<UserPhrase>(x => x.GuildId == (long) channel.Guild.Id)
+                        .ConfigureAwait(false);
+                    userPhrases = userPhrases.Where(x => msg.Content.ContainsWord(x.Phrase)).ToList();
+                    var phrases = await _db
+                        .GetAsync<Phrase>(x => userPhrases.Select(y => y.Id).Contains(x.UserPhraseId))
+                        .ConfigureAwait(false);
 
-                await msg.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
+                    if (userPhrases.Any())
+                    {
+                        var toInsert = new List<Phrase>();
+
+                        foreach (var up in userPhrases)
+                        {
+                            if (phrases.All(x => DateTimeOffset.UtcNow - x.Timestamp >= TimeSpan.FromSeconds(5)))
+                            {
+                                toInsert.Add(new Phrase
+                                {
+                                    GuildId = up.GuildId,
+                                    ChannelId = (long) msg.Channel.Id,
+                                    UserId = (long) msg.Author.Id,
+                                    UserPhraseId = up.Id
+                                });
+                            }
+                        }
+
+                        if (toInsert.Any()) await _db.InsertAllAsync(toInsert).ConfigureAwait(false);
+                    }
+
+                    if (!gc.EnableRespects || msg.Content != "F") return;
+
+                    var respects = await _db.GetAsync<Respects>(x =>
+                            x.GuildId == (long) channel.Guild.Id && x.Timestamp.Day == DateTimeOffset.UtcNow.Day)
+                        .ConfigureAwait(false);
+                    if (respects.Any(x => x.UserId == (long) msg.Author.Id)) return;
+
+                    var r = new Respects
+                    {
+                        GuildId = (long) channel.Guild.Id,
+                        UserId = (long) msg.Author.Id
+                    };
+                    await _db.InsertAsync(r).ConfigureAwait(false);
+                    var eb = new EmbedBuilder()
+                        .WithOkColor()
+                        .WithDescription(
+                            $"**{msg.Author}** has paid their respects ({respects.Count(x => x.Timestamp.Day == DateTimeOffset.UtcNow.Day) + 1} today).")
+                        .WithFooter($"{respects.Count + 1} total respects paid.");
+
+                    await msg.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
+                });
             }
 
             var context = new SocketCommandContext(_client, msg);

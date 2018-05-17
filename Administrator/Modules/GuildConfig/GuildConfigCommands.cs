@@ -32,7 +32,6 @@ namespace Administrator.Modules.GuildConfig
         [Command("permrole")]
         [Summary("Gets or sets this guild's permrole. The permrole is needed for many administrative commands.\nSetting the permrole requires **Administrator** permissions.")]
         [Usage("{p}permrole Admin")]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetPermRoleAsync([Remainder] string role = null)
         {
             if (!(Context.User is SocketGuildUser user)) return;
@@ -76,6 +75,76 @@ namespace Administrator.Modules.GuildConfig
                 .ConfigureAwait(false);
         }
 
+        [Command("showguildconfig")]
+        [Alias("showgc", "sgc")]
+        [Summary("Displays all bot configuration settings for this guild.")]
+        [Usage("{p}showguildconfig")]
+        [Remarks("Note: to view the greet message, use {p}greetmsg.")]
+        [RequirePermRole]
+        private async Task ShowGuildConfigAsync()
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            var eb = new EmbedBuilder()
+                .WithOkColor()
+                .WithTitle($"Bot configuration for {Context.Guild.Name}")
+                .WithThumbnailUrl(Context.Guild.IconUrl)
+                .WithDescription(
+                    $"**LogChannel**: {(gc.LogChannel == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.LogChannel)?.Mention)}\n" +
+                    $"**SuggestionChannel**: {(gc.SuggestionChannel == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.SuggestionChannel)?.Mention)}\n" +
+                    $"**SuggestionArchive**: {(gc.SuggestionArchive == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.SuggestionArchive)?.Mention)}\n" +
+                    $"**GreetChannel**: {(gc.GreetChannel == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.GreetChannel)?.Mention)}\n\n" +
+                    $"**PermRole**: {(Context.Guild.GetRole((ulong) gc.PermRole) is SocketRole permRole ? permRole.Name : "Not set")}\n" +
+                    $"**MuteRole**: {(Context.Guild.GetRole((ulong) gc.MuteRole) is SocketRole muteRole ? muteRole.Name : "Not set")}\n" +
+                    $"**LookingToPlayRole**: {(Context.Guild.GetRole((ulong) gc.LookingToPlayRole) is SocketRole ltpRole ? ltpRole.Name : "Not set")}\n" +
+                    $"**LookingToPlayMaxHours**: {(gc.LookingToPlayMaxHours == default ? "None" : $"{gc.LookingToPlayMaxHours} hours")}\n\n" +
+                    $"**UpvoteArrow**: {gc.UpvoteArrow}\n" +
+                    $"**DownvoteArrow**: {gc.DownvoteArrow}\n\n" +
+                    $"**VerboseErrors**: {gc.VerboseErrors}\n" +
+                    $"**GreetUserOnJoin**: {gc.GreetUserOnJoin}\n" +
+                    $"**GreetTimeout**: {(gc.GreetTimeout == default ? "Disabled" : $"{gc.GreetTimeout} seconds")}\n" + 
+                    $"**EnableRespects**: {gc.EnableRespects}\n" +
+                    $"**InviteFiltering**: {gc.InviteFiltering}\n" +
+                    $"**ServerInvite**: {(string.IsNullOrWhiteSpace(gc.InviteCode) ? "Not set" : $"https://discord.gg/{gc.InviteCode}")}\n" +
+                    $"**PhraseMinLength**: {gc.PhraseMinLength} characters");
+
+            await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
+        }
+
+        [Command("invitecode")]
+        [Summary(
+            "Gets or sets the guild's invite code. Using {p}invite will grab this code and create a link that users can share to invite others.")]
+        [Usage("{p}invitecode 08bddQ")]
+        [Remarks("Note: only the code is needed, not the full link.")]
+        [RequirePermRole]
+        private async Task GetOrSetInviteCodeAsync(string code = null)
+        {
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+
+            if (string.IsNullOrWhiteSpace(code) || gc.InviteCode == code)
+            {
+                if (string.IsNullOrWhiteSpace(gc.InviteCode))
+                {
+                    await Context.Channel.SendErrorAsync("This guild's invite link is currently not set.").ConfigureAwait(false);
+                    return;
+                }
+
+                await Context.Channel
+                    .SendConfirmAsync(
+                        $"This guild's invite link is currently set to https://discord.gg/{gc.InviteCode} .")
+                    .ConfigureAwait(false);
+
+                return;
+            }
+
+            gc.InviteCode = code;
+            await _db.UpdateAsync(gc).ConfigureAwait(false);
+
+            await Context.Channel
+                .SendConfirmAsync($"This guild's invite link has been set to https://discord.gg/{code} .")
+                .ConfigureAwait(false);
+        }
+
         [Command("muterole")]
         [Summary(
             "Gets or sets this guild's mute role. Users who are muted with {p}mute will have this role applied to them.")]
@@ -83,7 +152,6 @@ namespace Administrator.Modules.GuildConfig
         [Remarks(
             "Note: When you set the mute role, overwrite permissions will automatically be applied to every channel on this guild, preventing that role from sending messages, speaking, or adding reactions.")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetMuteRoleAsync([Remainder] string role = null)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
@@ -125,7 +193,6 @@ namespace Administrator.Modules.GuildConfig
         [Usage("{p}ltprole Looking to Play")]
         [Remarks("To modify the number of hours this role lasts, utilize the {p}ltphours command.")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetLtpRoleAsync([Remainder] string role = null)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
@@ -168,7 +235,6 @@ namespace Administrator.Modules.GuildConfig
         [Usage("{p}ltphours 6")]
         [Remarks("Note: by default, the looking to play role does not expire (defaults to 0).")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetLtpHours(long hours = long.MinValue)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
@@ -203,7 +269,6 @@ namespace Administrator.Modules.GuildConfig
             "Gets or sets this guild's upvote arrow. Suggestions and the {p}vote command utilize this emote. Defaults to ⬆.⬇")]
         [Usage("{p}upvotearrow ⬆")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetUpvoteArrowAsync(string emoteStr)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
@@ -239,7 +304,6 @@ namespace Administrator.Modules.GuildConfig
         [Summary("Gets or sets this guild's upvote arrow. Suggestions and the {p} vote command utilize this emote. Defaults to .")]
         [Usage("{p}downvote arrow ")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetDownvoteArrowAsync(string emoteStr)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
@@ -278,7 +342,6 @@ namespace Administrator.Modules.GuildConfig
         [Usage("{p}ve true")]
         [Remarks("This setting defaults to false.")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetVerboseErrorsAsync(bool? flag = null)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
@@ -304,7 +367,6 @@ namespace Administrator.Modules.GuildConfig
         [Summary("Gets or sets this guild's greeting mode.\n`true` will greet users if the guild has its greeting channel set up.\n`false` will disable greeting users.")]
         [Usage("{p}greetusers true")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetGreetingModeAsync(bool? flag = null)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
@@ -329,10 +391,9 @@ namespace Administrator.Modules.GuildConfig
         [Command("greetmessage")]
         [Alias("greetmsg")]
         [Summary("Gets or sets this guild's greet message. Supports TOML embeds.\n" +
-                 "You may use `{user}` to mention the user you are greeting.")]
+                    "You may use `{user}` to mention the user you are greeting.")]
         [Usage("{p}greetmsg Welcome to the server, {user}!")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetGreetMessageAsync([Remainder] string greetMsgOrEmbed = null)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
@@ -401,8 +462,8 @@ namespace Administrator.Modules.GuildConfig
 
         [Command("enablerespects")]
         [Summary("Gets or sets this guild's respects functionality. Sending `F` in any channel will increment a respects counter, once per day per user.\n" +
-                 "`true` enables this functionality.\n" +
-                 "`false` disables it.")]
+                    "`true` enables this functionality.\n" +
+                    "`false` disables it.")]
         [Usage("{p}enablerespects true")]
         [RequirePermRole]
         private async Task GetOrSetRespectsAsync(bool? flag = null)
@@ -428,8 +489,8 @@ namespace Administrator.Modules.GuildConfig
 
         [Command("invitefiltering")]
         [Summary("Gets or sets this guild's invite filtering functionality. Any discord invite links posted that are not invites to this guild will be filtered by the bot and deleted.\n" +
-                 "`true` enables this functionality.\n" +
-                 "`false` disables it.")]
+                    "`true` enables this functionality.\n" +
+                    "`false` disables it.")]
         [Usage("{p}invitefiltering true")]
         [Remarks("Note: This bot requires ManageGuild permissions to access invites to grant itself a \"whitelist\". Otherwise, it will delete all invites, not just external ones.")]
         [RequirePermRole]
@@ -446,7 +507,7 @@ namespace Administrator.Modules.GuildConfig
                 return;
             }
 
-            gc.EnableRespects = (bool) flag;
+            gc.InviteFiltering = (bool) flag;
             await _db.UpdateAsync(gc).ConfigureAwait(false);
             await Context.Channel
                 .SendConfirmAsync(
@@ -489,47 +550,10 @@ namespace Administrator.Modules.GuildConfig
                 .ConfigureAwait(false);
         }
 
-        [Command("showguildconfig")]
-        [Alias("showgc", "sgc")]
-        [Summary("Displays all bot configuration settings for this guild.")]
-        [Usage("{p}showguildconfig")]
-        [Remarks("Note: to view the greet message, use {p}greetmsg.")]
-        [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
-        private async Task ShowGuildConfigAsync()
-        {
-            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
-
-            var eb = new EmbedBuilder()
-                .WithOkColor()
-                .WithTitle($"Bot configuration for {Context.Guild.Name}")
-                .WithThumbnailUrl(Context.Guild.IconUrl)
-                .WithDescription(
-                    $"**LogChannel**: {(gc.LogChannel == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.LogChannel)?.Mention)}\n" +
-                    $"**SuggestionChannel**: {(gc.SuggestionChannel == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.SuggestionChannel)?.Mention)}\n" +
-                    $"**SuggestionArchive**: {(gc.SuggestionArchive == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.SuggestionArchive)?.Mention)}\n" +
-                    $"**GreetChannel**: {(gc.GreetChannel == default ? "Not set" : Context.Guild.GetTextChannel((ulong) gc.GreetChannel)?.Mention)}\n\n" +
-                    $"**PermRole**: {(Context.Guild.GetRole((ulong) gc.PermRole) is SocketRole permRole ? permRole.Name : "Not set")}\n" +
-                    $"**MuteRole**: {(Context.Guild.GetRole((ulong) gc.MuteRole) is SocketRole muteRole ? muteRole.Name : "Not set")}\n" +
-                    $"**LookingToPlayRole**: {(Context.Guild.GetRole((ulong) gc.LookingToPlayRole) is SocketRole ltpRole ? ltpRole.Name : "Not set")}\n" +
-                    $"**LookingToPlayMaxHours**: {(gc.LookingToPlayMaxHours == default ? "None" : $"{gc.LookingToPlayMaxHours} hours")}\n\n" +
-                    $"**UpvoteArrow**: {gc.UpvoteArrow}\n" +
-                    $"**DownvoteArrow**: {gc.DownvoteArrow}\n\n" +
-                    $"**VerboseErrors**: {gc.VerboseErrors}\n" +
-                    $"**GreetUserOnJoin**: {gc.GreetUserOnJoin}\n" +
-                    $"**GreetTimeout**: {(gc.GreetTimeout == default ? "Disabled" : $"{gc.GreetTimeout} seconds")}\n" + 
-                    $"**EnableRespects**: {gc.EnableRespects}\n" +
-                    $"**InviteFiltering**: {gc.InviteFiltering}\n" +
-                    $"**PhraseMinLength**: {gc.PhraseMinLength} characters");
-
-            await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
-        }
-
         [Command("logchannel")]
         [Summary("Get or set this guild's log channel. User leave/join/ban/unban/kick and message deletions will be logged to this channel.")]
         [Usage("{p}logchannel #logs")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetLogChannelAsync(IGuildChannel channel = null)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
@@ -564,7 +588,6 @@ namespace Administrator.Modules.GuildConfig
         [Summary("Get or set this guild's suggestion channel. Users who suggest with {p}suggest will have their suggestions posted to this channel.")]
         [Usage("{p}suggestionchannel #suggestions")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetSuggestionChannelAsync(IGuildChannel channel = null)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
@@ -600,7 +623,6 @@ namespace Administrator.Modules.GuildConfig
         [Usage("{p}suggestionarchive #suggestionarchive")]
         [Remarks("Note: if you do not set a suggestion archive channel, the !!suggestion command will not function.")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetSuggestionArchiveAsync(IGuildChannel channel = null)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
@@ -635,7 +657,6 @@ namespace Administrator.Modules.GuildConfig
         [Summary("Get or set this guild's greeting channel. Users who join will trigger a greeting message.")]
         [Usage("{p}greetchannel #welcome")]
         [RequirePermRole]
-        [RequireContext(ContextType.Guild)]
         private async Task GetOrSetGreetChannelAsync(IGuildChannel channel = null)
         {
             var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);

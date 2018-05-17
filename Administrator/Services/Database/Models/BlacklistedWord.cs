@@ -11,6 +11,7 @@ namespace Administrator.Services.Database.Models
 
         public long GuildId { get; set; }
 
+        [NotNull]
         public string Word { get; set; }
     }
 }

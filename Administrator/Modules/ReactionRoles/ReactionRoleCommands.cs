@@ -15,6 +15,8 @@ using Discord.WebSocket;
 namespace Administrator.Modules.ReactionRoles
 {
     [Name("ReactionRoles")]
+    [RequireContext(ContextType.Guild)]
+    [RequirePermRole]
     public class ReactionRoleCommands : ModuleBase<SocketCommandContext>
     {
         private readonly DbService _db;
@@ -31,8 +33,6 @@ namespace Administrator.Modules.ReactionRoles
         [Summary("Add a reaction role listener to a message.\n" +
                  "The format is like so: `#channel messageId emote1 role1 emote2 role2 ... emoteN roleN`")]
         [Usage("{p}arr #somechannel 1234567890 :emote1: \"Role 1\" :emote2: \"Role 2\" :emote3: \"Role 3\"")]
-        [RequireContext(ContextType.Guild)]
-        [RequirePermRole]
         [Remarks("Limit 10 listeners per guild.")]
         private async Task AddReactionRoleMessageAsync(IMessageChannel channel, params string[] args)
         {
@@ -135,8 +135,6 @@ namespace Administrator.Modules.ReactionRoles
         [Alias("rrr")]
         [Summary("Remove a reaction role listener given a valid message ID.")]
         [Usage("{p}rrr 1234567890")]
-        [RequireContext(ContextType.Guild)]
-        [RequirePermRole]
         private async Task RemoveReactionRoleMessageAsync(long id)
         {
             var rrm = await _db.GetAsync<ReactionRoleMessage>(x => x.GuildId == (long) Context.Guild.Id && x.Id == id).ConfigureAwait(false);
@@ -160,8 +158,6 @@ namespace Administrator.Modules.ReactionRoles
         [Alias("grr")]
         [Summary("Displays reaction role listeners on the current guild.")]
         [Usage("{p}grr")]
-        [RequireContext(ContextType.Guild)]
-        [RequirePermRole]
         private async Task GetReactionRoleMessagesAsync()
         {
             var rrms = await _db.GetAsync<ReactionRoleMessage>(x => x.GuildId == (long) Context.Guild.Id)

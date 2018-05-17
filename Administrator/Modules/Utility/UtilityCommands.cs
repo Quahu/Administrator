@@ -25,35 +25,35 @@ namespace Administrator.Modules.Utility
     public class UtilityCommands : ModuleBase<SocketCommandContext>
     {
         private static readonly Config Config = BotConfig.New();
-        private readonly CommandService commands;
-        private readonly DbService db;
-        private readonly LoggingService logging;
-        private readonly SuggestionService suggestions;
-        private readonly StatsService stats;
+        private readonly CommandService _commands;
+        private readonly DbService _db;
+        private readonly LoggingService _logging;
+        private readonly SuggestionService _suggestions;
+        private readonly StatsService _stats;
 
         public UtilityCommands(DbService db, SuggestionService suggestions,
             CommandService commands, LoggingService logging, StatsService stats)
         {
-            this.db = db;
-            this.suggestions = suggestions;
-            this.commands = commands;
-            this.logging = logging;
-            this.stats = stats;
+            _db = db;
+            _suggestions = suggestions;
+            _commands = commands;
+            _logging = logging;
+            _stats = stats;
         }
 
         #region Looking To Play
 
         [Command("lookingtoplay")]
         [Alias("ltp")]
-        [Summary("Toggle \"Looking to Play\" status on yourself. This role is mentionable and lasts as long as you specify (defaults to the guild's maximum allowed time)." +
+        [Summary("Toggle \"Looking to Play\" status on yourself. This role is mentionable and lasts as long as you specify, up to and defaulting to the guild's maximum allowed time." +
                "\nTo remove the role from yourself early, simply use the command again.")]
         [Usage("{p}ltp")]
         [RequireContext(ContextType.Guild)]
         private async Task ToggleLtpAsync(long hours = 0)
         {
             var eb = new EmbedBuilder();
-            var ltpUsers = await db.GetAsync<LtpUser>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
-            var gc = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var ltpUsers = await _db.GetAsync<LtpUser>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
 
             if (hours > gc.LookingToPlayMaxHours && gc.LookingToPlayMaxHours != default)
             {
@@ -73,7 +73,7 @@ namespace Administrator.Modules.Utility
                 eb.WithOkColor()
                     .WithDescription(
                         $"**{Context.User}** has successfully removed the {ltpRole.Name} role.");
-                await db.DeleteAsync(ltpUser).ConfigureAwait(false);
+                await _db.DeleteAsync(ltpUser).ConfigureAwait(false);
                 var _ = Context.Channel.EmbedAsync(eb.Build(), TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                 await (Context.User as SocketGuildUser).RemoveRoleAsync(ltpRole).ConfigureAwait(false);
             }
@@ -82,7 +82,7 @@ namespace Administrator.Modules.Utility
                 await (Context.User as SocketGuildUser).AddRoleAsync(ltpRole).ConfigureAwait(false);
                 eb.WithOkColor()
                     .WithDescription($"**{Context.User}** has successfully added the {ltpRole.Name} role.\n(This role will automatically be removed after {hours} hour(s).)")
-                    .AddField($"Current Members of \"{ltpRole.Name}\":", $"```css\n{string.Join(", ", ltpRole.Members.Select(l => l.ToString()))}\n```");
+                    .AddField($"Current Members of \"{ltpRole.Name}\":", $"```css\n{string.Join(", ", ltpRole.Members.Select(l => l.ToString())).Replace($"{Context.User},", string.Empty)}, {Context.User}\n```");
                 await Context.Channel.SendMessageAsync(gc.MentionLtpUsers ? ltpRole.Mention : string.Empty, embed: eb.Build()).ConfigureAwait(false);
 
                 var ltp = new LtpUser
@@ -92,7 +92,7 @@ namespace Administrator.Modules.Utility
                     Expires = hours < 1 ? DateTimeOffset.MaxValue : DateTimeOffset.UtcNow + TimeSpan.FromHours(hours)
                 };
 
-                await db.InsertAsync(ltp).ConfigureAwait(false);
+                await _db.InsertAsync(ltp).ConfigureAwait(false);
             }
         }
 
@@ -109,7 +109,7 @@ namespace Administrator.Modules.Utility
             {
                 var dm = await Context.User.GetOrCreateDMChannelAsync().ConfigureAwait(false);
                 await dm.SendMessageAsync(
-                        $"Use this link to invite me to your server! https://discordapp.com/api/oauth2/authorize?client_id=415401238356819968&permissions=1543892214&scope=bot")
+                        $"Use this link to invite me to your server! https://discordapp.com/api/oauth2/authorize?client_id={Context.Client.CurrentUser.Id}&permissions=1543892214&scope=bot")
                     .ConfigureAwait(false);
             }
             catch
@@ -129,21 +129,21 @@ namespace Administrator.Modules.Utility
                 .WithAuthor(new EmbedAuthorBuilder
                 {
                     IconUrl = Context.Client.CurrentUser.AvatarUrl(),
-                    Name = $"{Context.Client.CurrentUser.Username} {stats.BotVersion}"
+                    Name = $"{Context.Client.CurrentUser.Username} {_stats.BotVersion}"
                 })
                 .WithFooter($"Written using C# and Discord.Net by {app.Owner}")
                 .AddField("Uptime",
-                    $"{stats.Uptime.Days} days\n" +
-                    $"{stats.Uptime.Hours} hours\n" +
-                    $"{stats.Uptime.Minutes} minutes\n" +
-                    $"{stats.Uptime.Seconds} seconds", true)
+                    $"{_stats.Uptime.Days} days\n" +
+                    $"{_stats.Uptime.Hours} hours\n" +
+                    $"{_stats.Uptime.Minutes} minutes\n" +
+                    $"{_stats.Uptime.Seconds} seconds", true)
                 .AddField("Presence",
-                    $"Servers: {stats.Guilds}\n" +
-                    $"Text channels: {stats.TextChannels}\n" +
-                    $"Voice channels: {stats.VoiceChannels}\n" +
-                    $"Visible users: {stats.Users}", true)
-                .AddField("Commands run", stats.CommandsRun, true)
-                .AddField("Messages received", $"{stats.MessagesReceived} ({stats.MessagesReceived / stats.Uptime.TotalSeconds:F} / second)", true);
+                    $"Servers: {_stats.Guilds}\n" +
+                    $"Text channels: {_stats.TextChannels}\n" +
+                    $"Voice channels: {_stats.VoiceChannels}\n" +
+                    $"Visible users: {_stats.Users}", true)
+                .AddField("Commands run", _stats.CommandsRun, true)
+                .AddField("Messages received", $"{_stats.MessagesReceived} ({_stats.MessagesReceived / _stats.Uptime.TotalSeconds:F} / second)", true);
 
             await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
         }
@@ -153,28 +153,43 @@ namespace Administrator.Modules.Utility
         [Summary("Get the server invite.")]
         [Usage("{p}invite")]
         [RequireContext(ContextType.Guild)]
-        [RequireBotPermission(GuildPermission.ManageGuild)]
         private async Task GetInviteAsync()
         {
-            var invites = await Context.Guild.GetInvitesAsync().ConfigureAwait(false);
-            if (invites is null || invites.Count == 0)
-                return;
-            await Context.Channel.SendMessageAsync($"https://discord.gg/{invites.First().Code}").ConfigureAwait(false);
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(gc.InviteCode)) return;
+            
+            await Context.Channel.SendMessageAsync($"https://discord.gg/{gc.InviteCode}").ConfigureAwait(false);
         }
 
         [Command("emotes")]
         [Alias("em")]
-        [Summary("Show the server's custom emotes.")]
+        [Summary("Show the guild's custom emotes.")]
         [Usage("{p}emotes")]
         [RequireContext(ContextType.Guild)]
         [RequirePermissionsPass]
         private async Task GetEmojisAsync()
         {
             var emotes = Context.Guild.Emotes.ToList();
+            if (!emotes.Any())
+            {
+                await Context.Channel.SendErrorAsync("No emotes found on this guild.").ConfigureAwait(false);
+                return;
+            }
+
             var eb = new EmbedBuilder()
                 .WithOkColor()
-                .WithTitle("Server Emotes")
-                .WithDescription(string.Join("", emotes));
+                .WithTitle("Server Emotes");
+
+            if (string.Join(string.Empty, emotes).Length > 2048)
+            {
+                var count = emotes.Count / 2;
+                eb.AddField("🌟", string.Join(string.Empty, emotes.Take(count)))
+                    .AddField("🌟", string.Join(string.Empty, emotes.Skip(count)));
+            }
+            else
+            {
+                eb.WithDescription(string.Join("", emotes));
+            }
 
             await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
         }
@@ -209,7 +224,7 @@ namespace Administrator.Modules.Utility
         [RequirePermissionsPass]
         private async Task GetHelpAsync()
         {
-            var modules = commands.Modules.ToList();
+            var modules = _commands.Modules.ToList();
             var eb = new EmbedBuilder()
                 .WithOkColor()
                 .WithTitle("Command list")
@@ -261,7 +276,7 @@ namespace Administrator.Modules.Utility
             cmd = cmd.ToLower().TrimStart(Config.BotPrefix.ToArray());
             var eb = new EmbedBuilder();
 
-            if (commands.Commands.FirstOrDefault(x => x.Name.Equals(cmd) || x.Aliases.Contains(cmd)) is CommandInfo
+            if (_commands.Commands.FirstOrDefault(x => x.Name.Equals(cmd) || x.Aliases.Contains(cmd)) is CommandInfo
                 command)
             {
                 eb.WithOkColor()
@@ -312,7 +327,7 @@ namespace Administrator.Modules.Utility
                 .WithOkColor()
                 .WithAuthor(Context.Message.Author);
 
-            var guildConfig = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var guildConfig = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
 
             if (Context.Message.Attachments.Any())
             {
@@ -336,8 +351,8 @@ namespace Administrator.Modules.Utility
                 channel = Context.Guild.GetChannel(channelId) as ISocketMessageChannel;
 
             var msg = await channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
-            await suggestions.AddNewAsync(msg, Context.User as SocketGuildUser).ConfigureAwait(false);
-            logging.AddIgnoredMessages(new List<IMessage> {msg});
+            await _suggestions.AddNewAsync(msg, Context.User as SocketGuildUser).ConfigureAwait(false);
+            _logging.AddIgnoredMessages(new List<IMessage> {msg});
             await Context.Message.DeleteAsync().ConfigureAwait(false);
 
             var dm = await Context.Message.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
@@ -376,11 +391,11 @@ namespace Administrator.Modules.Utility
         [Priority(0)]
         private async Task GetSuggestionsAsync(string sort = "newest", int page = 1)
         {
-            var suggestionList = await db.GetAsync<Suggestion>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
+            var suggestionList = await _db.GetAsync<Suggestion>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
 
             if (suggestionList.Any())
             {
-                var guild = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+                var guild = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
                 var eb = new EmbedBuilder()
                     .WithOkColor();
                 sort = sort.ToLower();
@@ -426,8 +441,8 @@ namespace Administrator.Modules.Utility
         [Priority(1)]
         private async Task ModifySuggestionAsync(long id)
         {
-            var guild = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
-            var suggestionList = await db.GetAsync<Suggestion>(x => x.Id == id).ConfigureAwait(false);
+            var guild = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var suggestionList = await _db.GetAsync<Suggestion>(x => x.Id == id).ConfigureAwait(false);
 
             if (suggestionList.FirstOrDefault() is Suggestion s)
             {
@@ -455,8 +470,8 @@ namespace Administrator.Modules.Utility
         {
             if (Enum.TryParse(option.ToUpperFirst(), out SuggestionModification mod))
             {
-                var gc = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
-                var suggestionList = await db.GetAsync<Suggestion>(x => x.GuildId == (long) Context.Guild.Id && x.Id == id)
+                var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+                var suggestionList = await _db.GetAsync<Suggestion>(x => x.GuildId == (long) Context.Guild.Id && x.Id == id)
                     .ConfigureAwait(false);
 
                 if (suggestionList.FirstOrDefault() is Suggestion s
@@ -504,7 +519,7 @@ namespace Administrator.Modules.Utility
 
                     await Context.Message.AddReactionAsync(new Emoji("\U00002705")).ConfigureAwait(false);
                     await suggestionArchive.EmbedAsync(eb.Build()).ConfigureAwait(false);
-                    await suggestions.RemoveAsync(msg as IUserMessage).ConfigureAwait(false);
+                    await _suggestions.RemoveAsync(msg as IUserMessage).ConfigureAwait(false);
                     await msg.DeleteAsync().ConfigureAwait(false);
                 }
             }
@@ -513,8 +528,8 @@ namespace Administrator.Modules.Utility
                 await Context.Message.AddReactionAsync(new Emoji("\U00002753")).ConfigureAwait(false);
             }
             /*
-            var guildCfg = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
-            var suggestionList = await db.GetSuggestionsAsync().ConfigureAwait(false);
+            var guildCfg = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var suggestionList = await _db.GetSuggestionsAsync().ConfigureAwait(false);
             var archiveChannel = Context.Guild.GetChannel((ulong) guildCfg.SuggestionArchive) as ISocketMessageChannel;
             var suggestionChanneal =
                 Context.Guild.GetChannel((ulong) guildCfg.SuggestionChannel) as ISocketMessageChannel;
@@ -537,7 +552,7 @@ namespace Administrator.Modules.Utility
                         .WithImageUrl(msg.Embeds.First().Image.GetValueOrDefault().Url);
                     await Context.Message.AddReactionAsync(new Emoji("\U00002705")).ConfigureAwait(false);
                     await archiveChannel.EmbedAsync(eb.Build()).ConfigureAwait(false);
-                    await suggestions.RemoveAsync(msg).ConfigureAwait(false);
+                    await _suggestions.RemoveAsync(msg).ConfigureAwait(false);
                     await msg.DeleteAsync().ConfigureAwait(false);
                 }
                 else if (option.Equals("deny", StringComparison.InvariantCultureIgnoreCase))
@@ -555,7 +570,7 @@ namespace Administrator.Modules.Utility
                         .WithImageUrl(msg.Embeds.First().Image.GetValueOrDefault().Url);
                     await Context.Message.AddReactionAsync(new Emoji("\U00002705")).ConfigureAwait(false);
                     await archiveChannel.EmbedAsync(eb.Build()).ConfigureAwait(false);
-                    await suggestions.RemoveAsync(msg).ConfigureAwait(false);
+                    await _suggestions.RemoveAsync(msg).ConfigureAwait(false);
                     await msg.DeleteAsync().ConfigureAwait(false);
                 }
                 else

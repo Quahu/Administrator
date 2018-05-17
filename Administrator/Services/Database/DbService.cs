@@ -46,6 +46,7 @@ namespace Administrator.Services.Database
                     var gc = await GetOrCreateGuildConfigAsync(guild).ConfigureAwait(false);
                     if (gc.HasModifiedWarningPunishments ||
                         currentWarningPunishments.Any(x => x.GuildId == (long) guild.Id)) continue;
+
                     newWarningPunishments.Add(new WarningPunishment
                     {
                         GuildId = (long) guild.Id,
