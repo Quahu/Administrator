@@ -28,6 +28,6 @@ namespace Administrator.Services.Database.Models
         public long Downvotes { get; set; }
 
         [NotNull]
-        public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;
+        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     }
 }

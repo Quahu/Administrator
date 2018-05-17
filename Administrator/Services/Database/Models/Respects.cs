@@ -17,6 +17,6 @@ namespace Administrator.Services.Database.Models
 
         public long GuildId { get; set; }
 
-        public DateTimeOffset Timestamp { get; } = DateTimeOffset.UtcNow;
+        public DateTimeOffset Timestamp { get; set;  } = DateTimeOffset.UtcNow;
     }
 }

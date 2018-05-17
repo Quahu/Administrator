@@ -126,26 +126,22 @@ namespace Administrator
 
                 if (!gc.EnableRespects || msg.Content != "F") return;
 
-                var respects = await _db.GetAsync<Respects>().ConfigureAwait(false);
-                if (respects.All(r => r.GuildId == (long) channel.Guild.Id
-                        && r.Timestamp.Day == DateTimeOffset.UtcNow.Day
-                        && r.UserId != (long) msg.Author.Id))
-                {
-                    var r = new Respects
-                    {
-                        GuildId = (long) channel.Guild.Id,
-                        UserId = (long) msg.Author.Id
-                    };
-                    await _db.InsertAsync(r).ConfigureAwait(false);
-                    var eb = new EmbedBuilder()
-                        .WithOkColor()
-                        .WithDescription(
-                            $"**{msg.Author}** has paid their respects ({respects.Count(x => x.Timestamp.Day == DateTimeOffset.UtcNow.Day) + 1} today).")
-                        .WithFooter($"{respects.Count + 1} total respects paid.");
+                var respects = await _db.GetAsync<Respects>(x => x.GuildId == (long) channel.Guild.Id && x.Timestamp.Day == DateTimeOffset.UtcNow.Day).ConfigureAwait(false);
+                if (respects.Any(x => x.UserId == (long) msg.Author.Id)) return;
 
-                    await msg.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
-                }
-                return;
+                var r = new Respects
+                {
+                    GuildId = (long) channel.Guild.Id,
+                    UserId = (long) msg.Author.Id
+                };
+                await _db.InsertAsync(r).ConfigureAwait(false);
+                var eb = new EmbedBuilder()
+                    .WithOkColor()
+                    .WithDescription(
+                        $"**{msg.Author}** has paid their respects ({respects.Count(x => x.Timestamp.Day == DateTimeOffset.UtcNow.Day) + 1} today).")
+                    .WithFooter($"{respects.Count + 1} total respects paid.");
+
+                await msg.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
             }
 
             var context = new SocketCommandContext(_client, msg);
