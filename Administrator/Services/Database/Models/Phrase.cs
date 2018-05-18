@@ -11,7 +11,6 @@ namespace Administrator.Services.Database.Models
         [Column("InternalId")]
         public long Id { get; set; }
 
-        [NotNull]
         public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
 
         public long UserPhraseId { get; set; }

@@ -23,14 +23,12 @@ namespace Administrator.Services.Database.Models
         public IEnumerable<ulong> RoleIds
             => RoleStr.Split(",").Select(ulong.Parse).ToList();
 
-        [NotNull]
         public string RoleStr { get; set; }
 
         [Ignore]
         public IEnumerable<IEmote> Emotes
             => EmoteStr.Split(" ").Select(DiscordExtensions.GetEmote).ToList();
 
-        [NotNull]
         public string EmoteStr { get; set; }
     }
 }

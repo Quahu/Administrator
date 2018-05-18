@@ -17,17 +17,14 @@ namespace Administrator.Services.Database.Models
 
         public long UserId { get; set; }
 
-        [NotNull]
         public string Content { get; set; }
 
-        [NotNull]
         public string ImageUrl { get; set; } = string.Empty;
 
         public long Upvotes { get; set; }
 
         public long Downvotes { get; set; }
 
-        [NotNull]
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     }
 }

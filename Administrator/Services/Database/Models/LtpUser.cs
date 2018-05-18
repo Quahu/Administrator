@@ -15,7 +15,6 @@ namespace Administrator.Services.Database.Models
 
         public long GuildId { get; set; }
 
-        [NotNull]
         public DateTimeOffset Expires { get; set; }
     }
 }

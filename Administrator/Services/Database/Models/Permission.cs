@@ -24,7 +24,6 @@ namespace Administrator.Services.Database.Models
         [Column("InternalId")]
         public long Id { get; set; }
 
-        [NotNull]
         public string CommandName { get; set; }
 
         public long SetId { get; set; }

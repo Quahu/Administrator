@@ -16,10 +16,8 @@ namespace Administrator.Services.Database.Models
 
         public long GuildId { get; set; }
 
-        [NotNull]
         public DateTimeOffset Ending { get; set; } = DateTimeOffset.MaxValue;
 
-        [NotNull]
         public string Reason { get; set; } = "No reason specified.";
     }
 }

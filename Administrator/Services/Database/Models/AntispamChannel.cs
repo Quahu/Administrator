@@ -16,12 +16,10 @@ namespace Administrator.Services.Database.Models
 
         public int SpamPingCount { get; set; } = 10;
 
-        [NotNull]
         public bool AntiSpamMessageEnabled { get; set; } = true;
 
         public int AntiSpamMessageCount { get; set; } = 10;
 
-        [NotNull]
         public TimeSpan AntiSpamMessageTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
         public bool AntiSpamEmoteEnabled { get; set; } = true;

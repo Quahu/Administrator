@@ -21,8 +21,7 @@ namespace Administrator.Services.Database.Models
 
         public long GuildId { get; set; }
 
-        [NotNull]
-        public string PhraseStr { get; set; }
+        public string PhraseStr { get; set; } = string.Empty;
 
         public long Type { get; set; }
 

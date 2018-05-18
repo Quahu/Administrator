@@ -28,7 +28,7 @@ namespace Administrator.Modules.Fun
         private readonly DbService _db;
         private readonly RandomService _random;
         private readonly LoggingService _logging;
-        private readonly CrosstalkService _crossTalk;
+        private readonly CrosstalkService _crosstalk;
 
         private readonly IReadOnlyDictionary<string, EightBallOutcome> eightBallResponses = new Dictionary<string, EightBallOutcome>
         {
@@ -54,12 +54,12 @@ namespace Administrator.Modules.Fun
             {"Very doubtful", EightBallOutcome.Negative}
         };
 
-        public FunCommands(DbService db, RandomService random, LoggingService logging, CrosstalkService crossTalk)
+        public FunCommands(DbService db, RandomService random, LoggingService logging, CrosstalkService crosstalk)
         {
             _db = db;
             _random = random;
             _logging = logging;
-            _crossTalk = crossTalk;
+            _crosstalk = crosstalk;
         }
 
         [Command("crosstalk")]
@@ -71,10 +71,10 @@ namespace Administrator.Modules.Fun
         {
             if (!(Context.Channel is SocketTextChannel c)) return;
 
-            if (_crossTalk.Calls.FirstOrDefault(x => x.Channel1.Id == c.Id || x.Channel2.Id == c.Id) is CrosstalkCall
+            if (_crosstalk.Calls.FirstOrDefault(x => x.Channel1.Id == c.Id || x.Channel2.Id == c.Id) is CrosstalkCall
                 call)
             {
-                _crossTalk.Calls.Remove(call);
+                _crosstalk.Calls.Remove(call);
 
                 if (c.Id == call.Channel1.Id)
                 {
@@ -88,7 +88,7 @@ namespace Administrator.Modules.Fun
                 return;
             }
 
-            await _crossTalk.AddChannelAsync(c).ConfigureAwait(false);
+            await _crosstalk.AddChannelAsync(c).ConfigureAwait(false);
         }
 
         //[Ratelimit(1, 2, Measure.Minutes)]
