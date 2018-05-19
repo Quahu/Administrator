@@ -3,17 +3,16 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp2.0</TargetFramework>
-    <AssemblyVersion>1.1.1.0</AssemblyVersion>
-    <FileVersion>1.1.1.0</FileVersion>
-    <Version>1.1.1</Version>
+    <AssemblyVersion>1.1.2.0</AssemblyVersion>
+    <FileVersion>1.1.2.0</FileVersion>
+    <Version>1.1.2</Version>
     <Authors>QuantumToast</Authors>
     <Company />
     <Description>Slightly TF2-Themed Discord bot.</Description>
     <PackageProjectUrl>https://github.com/QuantumToasted/Administrator</PackageProjectUrl>
     <RepositoryUrl>https://github.com/QuantumToasted/Administrator</RepositoryUrl>
     <RepositoryType>GitHub</RepositoryType>
-    <PackageReleaseNotes>"sped up" CommandHandler (wrapping non-command logic in a Task.Run())
-Some more module changes</PackageReleaseNotes>
+    <PackageReleaseNotes></PackageReleaseNotes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

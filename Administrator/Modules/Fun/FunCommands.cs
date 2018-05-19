@@ -62,16 +62,20 @@ namespace Administrator.Modules.Fun
             _crosstalk = crosstalk;
         }
 
-        [Command("crosstalk")]
-        [Summary("Start or join a crosstalk service. Times out after 1 minute if nobody connects. Lasts 1 minute. Use the command again during a call to end it early.")]
-        [Usage("{p}crosstalk")]
+        [Command("crosstalk", RunMode = RunMode.Async)]
+        [Summary("Start or join a crosstalk call.\n" +
+                 "If no calls are found, starts an empty call and waits for another channel to connect.\n" +
+                 "You may supply the `-c` flag to generate a code that you can use to connect to your call directly.\n" +
+                 "Using a code is optional, omitting a code for the command will simply find the first available call.\n" +
+                 "You may supply a given code to automatically connect to that specific call. See **Usage** for examples.")]
+        [Usage("{p}crosstalk", "{p}crosstalk -c", "{p}crosstalk 1b5dft61")]
         [RequirePermissionsPass]
         [RequireContext(ContextType.Guild)]
-        private async Task StartCrosstalkSessionAsync()
+        private async Task StartCrosstalkSessionAsync(string codeOrFlag = null)
         {
             if (!(Context.Channel is SocketTextChannel c)) return;
 
-            if (_crosstalk.Calls.FirstOrDefault(x => x.Channel1.Id == c.Id || x.Channel2.Id == c.Id) is CrosstalkCall
+            if (_crosstalk.Calls.FirstOrDefault(x => x.IsConnected && x.ContainsChannel(c)) is CrosstalkCall
                 call)
             {
                 _crosstalk.Calls.Remove(call);
@@ -85,10 +89,66 @@ namespace Administrator.Modules.Fun
 
                 await call.Channel1.SendConfirmAsync("The other caller hung up the crosstalk phone.").ConfigureAwait(false);
                 await call.Channel2.SendConfirmAsync("You hung up the crosstalk phone.").ConfigureAwait(false);
+
+                var msgs1 = await (call.Channel1 as IMessageChannel).GetMessagesAsync(20, CacheMode.CacheOnly)
+                    .FlattenAsync().ConfigureAwait(false);
+                var msgs2 = await (call.Channel2 as IMessageChannel).GetMessagesAsync(20, CacheMode.CacheOnly)
+                    .FlattenAsync().ConfigureAwait(false);
+
+                var m1 = msgs1.Where(x =>
+                    x.Content.Contains("** is typing...") && x.Author.Id == Context.Client.CurrentUser.Id).ToList();
+                var m2 = msgs2.Where(x =>
+                    x.Content.Contains("** is typing...") && x.Author.Id == Context.Client.CurrentUser.Id).ToList();
+
+                if (m1.Any())
+                {
+                    foreach (var m in m1)
+                    {
+                        try
+                        {
+                            await m.DeleteAsync().ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            // ignore
+                        }
+                    }
+                }
+
+                if (m2.Any())
+                {
+                    foreach (var m in m2)
+                    {
+                        try
+                        {
+                            await m.DeleteAsync().ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            // ignore
+                        }
+                    }
+                }
+
                 return;
             }
 
-            await _crosstalk.AddChannelAsync(c).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(codeOrFlag))
+            {
+                if (codeOrFlag.Equals("-c", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    await _crosstalk.AddChannelAsync(c, true).ConfigureAwait(false);
+                    return;
+                }
+
+                if (_crosstalk.Calls.All(x => !x.ConnectionCode.Equals(codeOrFlag)))
+                {
+                    await c.SendErrorAsync("No calls found with that code.").ConfigureAwait(false);
+                    return;
+                }
+            }
+
+            await _crosstalk.AddChannelAsync(c, false, codeOrFlag).ConfigureAwait(false);
         }
 
         //[Ratelimit(1, 2, Measure.Minutes)]

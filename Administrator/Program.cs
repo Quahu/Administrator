@@ -43,9 +43,11 @@ namespace Administrator
             commands = new CommandService();
             interactive = new InteractiveService(client);
 
+            var crosstalk = new CrosstalkService(client);
+
             db = new DbService(Config.Db.FullLocation, client, commands);
             suggestion = new SuggestionService(client, db);
-            logging = new LoggingService(client, db, commands);
+            logging = new LoggingService(client, db, commands, crosstalk);
             random = new RandomService();
             reaction = new ReactionRoleService(client, db);
             stats = new StatsService(client);
@@ -57,12 +59,12 @@ namespace Administrator
                 .AddSingleton(logging)
                 .AddSingleton(random)
                 .AddSingleton(interactive)
-                .AddSingleton(new CrosstalkService())
+                .AddSingleton(crosstalk)
                 .AddSingleton(stats)
                 .AddSingleton(reaction)
                 .BuildServiceProvider();
             handler = new CommandHandler(services);
-            scheduler = new SchedulerService(db, client);
+            scheduler = new SchedulerService(db, client, crosstalk);
 
             await commands.AddModulesAsync(Assembly.GetEntryAssembly()).ConfigureAwait(false);
             await client.LoginAsync(TokenType.Bot, Config.BotToken).ConfigureAwait(false);

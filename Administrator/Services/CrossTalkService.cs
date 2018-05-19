@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Metadata.Ecma335;
 using System.Threading.Tasks;
+using System.Xml;
 using Administrator.Extensions;
 using Discord;
 using Discord.WebSocket;
@@ -14,83 +16,120 @@ namespace Administrator.Services
 
         public SocketTextChannel Channel2 { get; set; }
 
-        public DateTimeOffset LastMessage { get; set; } = DateTimeOffset.MinValue;
+        public string ConnectionCode { get; set; }
+
+        public bool IsConnected { get; set; }
+
+        public DateTimeOffset Starting { get; set; } = DateTimeOffset.UtcNow;
+
+        public bool IsExpired
+            => DateTimeOffset.UtcNow - Starting > TimeSpan.FromMinutes(2);
+
+        public static string GenerateCode()
+            => Convert.ToBase64String(Guid.NewGuid().ToByteArray()).Substring(0, 8).ToLower();
+
+        public bool Equals(CrosstalkCall call)
+            => Channel1.Id == call.Channel1.Id
+                   && Channel2?.Id == call.Channel2?.Id
+                   && ConnectionCode == call.ConnectionCode
+                   && IsConnected == call.IsConnected;
+
+        public bool ContainsChannel(SocketTextChannel c)
+            => Channel1.Id == c.Id || Channel2?.Id == c.Id;
+
+        public bool ContainsGuild(SocketGuild g)
+            => Channel1.Guild.Id == g.Id || Channel2?.Guild.Id == g.Id;
     }
 
     public class CrosstalkService
     {
-        private readonly List<SocketTextChannel> _channels;
+        private readonly DiscordSocketClient _client;
 
-        public CrosstalkService()
+        public CrosstalkService(DiscordSocketClient client)
         {
-            _channels = new List<SocketTextChannel>();
+            _client = client;
+
             Calls = new List<CrosstalkCall>();
         }
 
         public List<CrosstalkCall> Calls { get; }
+        //public List<SocketTextChannel> Channels { get; }
 
-        public async Task AddChannelAsync(SocketTextChannel c)
+        // with code
+        public async Task AddChannelAsync(SocketTextChannel c, bool generateCode, string code = null)
         {
-            if (Calls.Any(x => x.Channel1.Guild.Id == c.Guild.Id || x.Channel2.Guild.Id == c.Guild.Id))
+            if (Calls.FirstOrDefault(x => x.ContainsGuild(c.Guild)) is CrosstalkCall inCall)
             {
-                await c.SendErrorAsync("Your guild is already in a crosstalk call!").ConfigureAwait(false);
-                return;
-            }
-
-            if (_channels.Any(x => x.Guild.Id == c.Guild.Id))
-            {
-                await c.SendErrorAsync("Your guild is already ringing on the crosstalk phone!").ConfigureAwait(false);
-                return;
-            }
-
-            if (_channels.FirstOrDefault() is SocketTextChannel receiverChannel)
-            {
-                Calls.Add(new CrosstalkCall
+                if (c.Guild.GetTextChannel(inCall.Channel1.Id) is null)
                 {
-                    Channel1 = c,
-                    Channel2 = receiverChannel
-                });
-                _channels.Remove(receiverChannel);
-                await c.EmbedAsync(new EmbedBuilder()
-                    .WithOkColor()
-                    .WithDescription("You're connected on the crosstalk line! Say hi!")
-                    .Build()).ConfigureAwait(false);
-                await receiverChannel.EmbedAsync(new EmbedBuilder()
-                    .WithOkColor()
-                    .WithDescription("You're connected on the crosstalk line! Say hi!")
-                    .Build()).ConfigureAwait(false);
-
-                _ = Task.Delay(TimeSpan.FromMinutes(1))
-                    .ContinueWith(async t =>
-                    {
-                        await c.EmbedAsync(new EmbedBuilder()
-                            .WithOkColor()
-                            .WithDescription("Hanging up the crosstalk phone.")
-                            .Build()).ConfigureAwait(false);
-                        await receiverChannel.EmbedAsync(new EmbedBuilder()
-                            .WithOkColor()
-                            .WithDescription("Hanging up the crosstalk phone.")
-                            .Build()).ConfigureAwait(false);
-                        Calls.Remove(Calls.FirstOrDefault(x => x.Channel1.Id == c.Id || x.Channel2.Id == c.Id));
-                    });
+                    await c.SendErrorAsync($"Your guild is already on the phone in {inCall.Channel2.Mention}!")
+                        .ConfigureAwait(false);
+                }
+                else
+                {
+                    await c.SendErrorAsync($"Your guild is already on the phone in {inCall.Channel1.Mention}!")
+                        .ConfigureAwait(false);
+                }
 
                 return;
             }
 
-            _channels.Add(c);
-            _ = c.EmbedAsync(new EmbedBuilder()
-                .WithOkColor()
-                .WithDescription("Ringing on the crosstalk phone...")
-                .Build())
-                .ContinueWith(async _1 => await Task.Delay(TimeSpan.FromMinutes(1))
-                .ContinueWith(async _2 =>
-                {
-                    if (Calls.All(x => x.Channel1.Id != c.Id && x.Channel2.Id != c.Id))
-                    {
-                        await c.SendErrorAsync("Hanging up the crosstalk phone because nobody answered.");
-                        _channels.Remove(c);
-                    }
-                }));
+            // try connecting by connection code
+            if (!string.IsNullOrWhiteSpace(code)
+                && Calls.FirstOrDefault(x =>
+                        !string.IsNullOrWhiteSpace(x.ConnectionCode) && x.ConnectionCode.Equals(code) &&
+                        !x.IsConnected) is
+                    CrosstalkCall codeCall)
+            {
+                Calls.Remove(codeCall);
+                codeCall.Channel2 = c;
+                codeCall.IsConnected = true;
+                codeCall.Starting = DateTimeOffset.UtcNow;
+                Calls.Add(codeCall);
+
+                await codeCall.Channel1
+                    .SendConfirmAsync($"You've connected on the crosstalk line. Say hi to `#{codeCall.Channel2.Name}`!")
+                    .ConfigureAwait(false);
+                await codeCall.Channel2
+                    .SendConfirmAsync($"You've connected on the crosstalk line. Say hi to `#{codeCall.Channel1.Name}`!")
+                    .ConfigureAwait(false);
+
+                return;
+            }
+
+            // try connecting to the first available channel that is not using a code
+            if (Calls.FirstOrDefault(x =>
+                    x.Channel1.Id != c.Id && !x.IsConnected && string.IsNullOrWhiteSpace(x.ConnectionCode)) is
+                CrosstalkCall
+                cl)
+            {
+                Calls.Remove(cl);
+                cl.Channel2 = c;
+                cl.IsConnected = true;
+                cl.Starting = DateTimeOffset.UtcNow;
+                Calls.Add(cl);
+
+                await cl.Channel1
+                    .SendConfirmAsync($"You've connected on the crosstalk line. Say hi to `#{cl.Channel2.Name}`!")
+                    .ConfigureAwait(false);
+                await cl.Channel2
+                    .SendConfirmAsync($"You've connected on the crosstalk line. Say hi to `#{cl.Channel1.Name}`!")
+                    .ConfigureAwait(false);
+
+                return;
+            }
+
+            // no call found, create a new one
+            var ringing = new CrosstalkCall
+            {
+                Channel1 = c,
+                ConnectionCode = generateCode ? CrosstalkCall.GenerateCode() : null
+            };
+
+            Calls.Add(ringing);
+
+            await c.SendConfirmAsync(
+                $"Ringing on the crosstalk phone{(string.IsNullOrWhiteSpace(ringing.ConnectionCode) ? "..." : $" - your code is `{ringing.ConnectionCode}`. Use this code to connect directly from another channel!")}");
         }
     }
 }

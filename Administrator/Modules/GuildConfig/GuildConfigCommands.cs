@@ -474,7 +474,7 @@ namespace Administrator.Modules.GuildConfig
             {
                 await Context.Channel
                     .SendConfirmAsync(
-                        $"This guild's respects counter is currently {(gc.GreetUserOnJoin ? "enabled" : "disabled")}.")
+                        $"This guild's respects counter is currently {(gc.EnableRespects ? "enabled" : "disabled")}.")
                     .ConfigureAwait(false);
                 return;
             }
@@ -483,7 +483,7 @@ namespace Administrator.Modules.GuildConfig
             await _db.UpdateAsync(gc).ConfigureAwait(false);
             await Context.Channel
                 .SendConfirmAsync(
-                    $"This guild's respects counter has been {(gc.GreetUserOnJoin ? "enabled" : "disabled")}.")
+                    $"This guild's respects counter has been {(gc.EnableRespects ? "enabled" : "disabled")}.")
                 .ConfigureAwait(false);
         }
 

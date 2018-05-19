@@ -95,20 +95,68 @@ namespace Administrator
                     }
 
                     // check for active calls
-                    if (msg.Channel is SocketTextChannel ch &&
-                        _crosstalk.Calls.FirstOrDefault(x => x.Channel1.Id == ch.Id || x.Channel2.Id == ch.Id) is
+                    if (!string.IsNullOrWhiteSpace(msg.Content)
+                        && msg.Channel is SocketTextChannel ch &&
+                        _crosstalk.Calls.FirstOrDefault(x => x.Channel1.Id == ch.Id || x.Channel2.Id == ch.Id && x.IsConnected) is
                             CrosstalkCall call)
                     {
                         if (call.Channel1.Id == channel.Id)
                         {
+                            /*
+                            var chnl2Messages = await (call.Channel2 as IMessageChannel)
+                                .GetMessagesAsync(20, CacheMode.CacheOnly).FlattenAsync().ConfigureAwait(false);
+                            var msgs2 = chnl2Messages.Where(x => x.Content.Equals(
+                                    $"{Emote.Parse("<a:typing:447092767428968458>")} **{msg.Author.Username.SanitizeMentions()}** is typing...")
+                                    && x.Author.Id == _client.CurrentUser.Id)
+                                    .ToList();
+
+                            if (msgs2.Any())
+                            {
+                                foreach (var m in msgs2)
+                                {
+                                    try
+                                    {
+                                        await m.DeleteAsync();
+                                    }
+                                    catch
+                                    {
+                                        // ignored
+                                    }
+                                }
+                            }
+                            */
                             await call.Channel2
-                                .SendMessageAsync($"**{msg.Author.Username}**: {msg.Content.SanitizeMentions()}")
+                                .SendMessageAsync($"**{msg.Author.Username.SanitizeMentions()}**: {msg.Content.SanitizeMentions()}")
                                 .ConfigureAwait(false);
                             return;
                         }
 
+                        /*
+                        var chnl1Messages = await (call.Channel1 as IMessageChannel)
+                            .GetMessagesAsync(20, CacheMode.CacheOnly).FlattenAsync().ConfigureAwait(false);
+                        var msgs1 = chnl1Messages.Where(x => x.Content.Equals(
+                                $"{Emote.Parse("<a:typing:447092767428968458>")} **{msg.Author.Username.SanitizeMentions()}** is typing...")
+                                && x.Author.Id == _client.CurrentUser.Id)
+                                .ToList();
+
+                        if (msgs1.Any())
+                        {
+                            foreach (var m in msgs1)
+                            {
+                                try
+                                {
+                                    await m.DeleteAsync();
+                                }
+                                catch
+                                {
+                                    // ignored
+                                }
+                            }
+                        }
+                        */
+
                         await call.Channel1
-                            .SendMessageAsync($"**{msg.Author.Username}**: {msg.Content.SanitizeMentions()}")
+                            .SendMessageAsync($"**{msg.Author.Username.SanitizeMentions()}**: {msg.Content.SanitizeMentions()}")
                             .ConfigureAwait(false);
                     }
 
@@ -162,6 +210,7 @@ namespace Administrator
 
                     await msg.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
                 });
+                return;
             }
 
             var context = new SocketCommandContext(_client, msg);

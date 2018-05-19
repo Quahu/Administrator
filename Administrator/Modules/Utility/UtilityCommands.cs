@@ -131,7 +131,7 @@ namespace Administrator.Modules.Utility
                     IconUrl = Context.Client.CurrentUser.AvatarUrl(),
                     Name = $"{Context.Client.CurrentUser.Username} {_stats.BotVersion}"
                 })
-                .WithFooter($"Written using C# and Discord.Net by {app.Owner}")
+                .WithFooter($"Created by {app.Owner}")
                 .AddField("Uptime",
                     $"{_stats.Uptime.Days} days\n" +
                     $"{_stats.Uptime.Hours} hours\n" +
@@ -141,7 +141,7 @@ namespace Administrator.Modules.Utility
                     $"Servers: {_stats.Guilds}\n" +
                     $"Text channels: {_stats.TextChannels}\n" +
                     $"Voice channels: {_stats.VoiceChannels}\n" +
-                    $"Visible users: {_stats.Users}", true)
+                    $"Total members: {_stats.Users}", true)
                 .AddField("Commands run", _stats.CommandsRun, true)
                 .AddField("Messages received", $"{_stats.MessagesReceived} ({_stats.MessagesReceived / _stats.Uptime.TotalSeconds:F} / second)", true);
 

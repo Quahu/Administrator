@@ -22,11 +22,13 @@ namespace Administrator.Services
         private readonly List<IMessage> _toIgnore = new List<IMessage>();
         private readonly DbService _db;
         private readonly DiscordSocketClient _client;
+        private readonly CrosstalkService _crosstalk;
 
-        public LoggingService(DiscordSocketClient client, DbService db, CommandService commands)
+        public LoggingService(DiscordSocketClient client, DbService db, CommandService commands, CrosstalkService crosstalk)
         {
             _db = db;
             _client = client;
+            _crosstalk = crosstalk;
 
             _client.UserJoined += OnUserJoined;
             _client.MessageDeleted += OnMessageDeleted;
@@ -36,8 +38,73 @@ namespace Administrator.Services
             _client.Log += LogMessage;
             _client.MessageUpdated += OnMessageUpdated;
             _client.JoinedGuild += OnGuildJoin;
+            //_client.UserIsTyping += OnUserTyping;
             commands.Log += LogMessage;
         }
+        /*
+        private Task OnUserTyping(SocketUser usr, ISocketMessageChannel chnl)
+        {
+            if (!(usr is SocketGuildUser u) || !(chnl is SocketTextChannel c)) return Task.CompletedTask;
+
+            return Task.Run(async () =>
+            {
+                if (_crosstalk.Calls.FirstOrDefault(x => x.ContainsChannel(c) && x.IsConnected) is CrosstalkCall call)
+                {
+                    if (call.Channel1.Id == c.Id)
+                    {
+                        var chnl2Messages = await (call.Channel2 as IMessageChannel).GetMessagesAsync(20, CacheMode.CacheOnly).FlattenAsync().ConfigureAwait(false);
+                        var msgs2 = chnl2Messages.Where(x => x.Content.Equals(
+                            $"{Emote.Parse("<a:typing:447092767428968458>")} **{u.Username.SanitizeMentions()}** is typing...")
+                            && x.Author.Id == _client.CurrentUser.Id)
+                            .ToList();
+
+                        if (msgs2.Any())
+                        {
+                            foreach (var m in msgs2)
+                            {
+                                try
+                                {
+                                    await m.DeleteAsync();
+                                }
+                                catch
+                                {
+                                    // ignored
+                                }
+                            }
+                        }
+
+                        await call.Channel2.SendMessageAsync($"{Emote.Parse("<a:typing:447092767428968458>")} **{u.Username.SanitizeMentions()}** is typing...")
+                            .ConfigureAwait(false);
+                        return;
+                    }
+
+                    var chnl1Messages = await (call.Channel1 as IMessageChannel).GetMessagesAsync(20, CacheMode.CacheOnly).FlattenAsync().ConfigureAwait(false);
+                    var msgs1 = chnl1Messages.Where(x => x.Content.Equals(
+                            $"{Emote.Parse("<a:typing:447092767428968458>")} **{u.Username.SanitizeMentions()}** is typing...")
+                            && x.Author.Id == _client.CurrentUser.Id)
+                            .ToList();
+
+                    if (msgs1.Any())
+                    {
+                        foreach (var m in msgs1)
+                        {
+                            try
+                            {
+                                await m.DeleteAsync();
+                            }
+                            catch
+                            {
+                                // ignored
+                            }
+                        }
+                    }
+
+                    await call.Channel1.SendMessageAsync($"{Emote.Parse("<a:typing:447092767428968458>")} **{u.Username.SanitizeMentions()}** is typing...")
+                        .ConfigureAwait(false);
+                }
+            });
+        }
+        */
 
         private async Task OnGuildJoin(SocketGuild guild)
         {

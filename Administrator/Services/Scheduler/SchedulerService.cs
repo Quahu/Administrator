@@ -14,16 +14,19 @@ namespace Administrator.Services.Scheduler
     {
         private static readonly Logger Log = LogManager.GetCurrentClassLogger();
 
-        public SchedulerService(DbService db, DiscordSocketClient client)
+        public SchedulerService(DbService db, DiscordSocketClient client, CrosstalkService crosstalk)
         {
             var muteChecker = new MuteChecker(db, client);
             var ltpChecker = new LtpChecker(db, client);
+            var crosstalkChecker = new CrosstalkChecker(crosstalk);
             
             Log.Info("Adding scheduler(s) to registry.");
             Schedule(async () => await muteChecker.CheckMutesAsync().ConfigureAwait(false))
                 .NonReentrant().ToRunEvery(1).Minutes();
             Schedule(async () => await ltpChecker.RemoveExpiredLtpPlayersAsync().ConfigureAwait(false))
                 .NonReentrant().ToRunEvery(1).Minutes();
+            Schedule(async () => await crosstalkChecker.CheckExpiredCallsAsync().ConfigureAwait(false))
+                .NonReentrant().ToRunEvery(10).Seconds();
 
             client.Connected += () =>
             {

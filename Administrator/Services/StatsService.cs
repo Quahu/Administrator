@@ -8,7 +8,7 @@ namespace Administrator.Services
 {
     public class StatsService
     {
-        private const string BOT_VERSION = "1.1.0";
+        private const string BOT_VERSION = "1.1.2";
         private readonly BaseSocketClient _client;
         private readonly DateTimeOffset _dt;
 
@@ -29,7 +29,7 @@ namespace Administrator.Services
             => _client.Guilds.Count;
 
         public int Users
-            => _client.Guilds.SelectMany(g => g.Users).Count();
+            => _client.Guilds.Select(g => g.MemberCount).Sum();
 
         public int TextChannels
             => _client.Guilds.SelectMany(g => g.TextChannels).Count();
