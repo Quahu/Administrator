@@ -192,9 +192,9 @@ namespace Administrator
                     if (!gc.EnableRespects || msg.Content != "F") return;
 
                     var respects = await _db.GetAsync<Respects>(x =>
-                            x.GuildId == (long) channel.Guild.Id && x.Timestamp.Day == DateTimeOffset.UtcNow.Day)
+                            x.GuildId == (long) channel.Guild.Id)
                         .ConfigureAwait(false);
-                    if (respects.Any(x => x.UserId == (long) msg.Author.Id)) return;
+                    if (respects.Any(x => x.UserId == (long) msg.Author.Id && x.Timestamp.Day == DateTimeOffset.UtcNow.Day)) return;
 
                     var r = new Respects
                     {
