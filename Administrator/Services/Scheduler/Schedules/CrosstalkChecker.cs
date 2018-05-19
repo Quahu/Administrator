@@ -18,7 +18,7 @@ namespace Administrator.Services.Scheduler.Schedules
 
         public async Task CheckExpiredCallsAsync()
         {
-            foreach (var c in _crosstalk.Calls.Where(x => x.IsExpired))
+            foreach (var c in _crosstalk.Calls.Where(x => x.IsExpired).ToList())
             {
                 if (c.IsConnected)
                 {
