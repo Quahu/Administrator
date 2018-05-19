@@ -23,10 +23,23 @@ using Microsoft.CodeAnalysis.Scripting;
 
 namespace Administrator.Modules.BotOwner
 {
+
     [Name("BotOwner")]
     public class BotOwnerCommands : ModuleBase<SocketCommandContext>
     {
-        private static readonly Config config = BotConfig.New();
+        public class Globals
+        {
+            public SocketCommandContext Context;
+            public DbService Db;
+        }
+
+        private static readonly Config Config = BotConfig.New();
+        private readonly DbService _db;
+
+        public BotOwnerCommands(DbService db)
+        {
+            _db = db;
+        }
 
         [Command("setgame")]
         [Summary("Change the bot's playing status.")]
@@ -47,7 +60,7 @@ namespace Administrator.Modules.BotOwner
             }
         }
 
-        [Command("eval")]
+        [Command("eval", RunMode = RunMode.Async)]
         [RequireOwner]
         private async Task EvalCodeAsync([Remainder] string script)
         {
@@ -55,11 +68,14 @@ namespace Administrator.Modules.BotOwner
             {
                 var sopts = ScriptOptions.Default;
                 sopts = sopts.WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text",
-                    "System.Threading.Tasks");
-                sopts = sopts.WithReferences(AppDomain.CurrentDomain.GetAssemblies().Where(xa => !xa.IsDynamic && !string.IsNullOrWhiteSpace(xa.Location)));
-                var result = await CSharpScript.EvaluateAsync(SanitizeCode(script), sopts, this)
+                    "System.Threading.Tasks", "Discord", "Discord.Commands", "Administrator.Extensions", "Administrator.Services.Database.Models");
+                sopts = sopts.WithReferences(AppDomain.CurrentDomain.GetAssemblies().Where(x => !x.IsDynamic && !string.IsNullOrWhiteSpace(x.Location)));
+                var result = await CSharpScript.EvaluateAsync(SanitizeCode(script), sopts, new Globals{ Context = Context, Db = _db})
                     .ConfigureAwait(false);
-                await Context.Channel.SendConfirmAsync(result.ToString()).ConfigureAwait(false);
+                if (!(result is null))
+                {
+                    await Context.Channel.SendConfirmAsync(result.ToString()).ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
             {
@@ -72,6 +88,37 @@ namespace Administrator.Modules.BotOwner
                 return Regex.Replace(cleanCode.Trim(), "^`|`$", string.Empty); //strip out the ` characters from the beginning and end of the string
             }
         }
+
+        /*
+        [Command("eval", RunMode = RunMode.Async)]
+        [RequireOwner]
+        private async Task EvalCodeAsync([Remainder] string script)
+        {
+            try
+            {
+                var sopts = ScriptOptions.Default;
+                sopts = sopts.WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text",
+                    "System.Threading.Tasks", "Discord", "Discord.Commands", "Administrator.Extensions");
+                sopts = sopts.WithReferences(AppDomain.CurrentDomain.GetAssemblies().Where(x => !x.IsDynamic && !string.IsNullOrWhiteSpace(x.Location)));
+                var result = await CSharpScript.EvaluateAsync(SanitizeCode(script), sopts, this)
+                    .ConfigureAwait(false);
+                if (!(result is null))
+                {
+                    await Context.Channel.SendConfirmAsync(result.ToString()).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                await Context.Channel.SendErrorAsync($"Could not execute code:\n```\n{ex}\n```").ConfigureAwait(false);
+            }
+
+            string SanitizeCode(string s)
+            {
+                var cleanCode = s.Replace("```csharp", string.Empty).Replace("```cs", string.Empty).Replace("```", string.Empty);
+                return Regex.Replace(cleanCode.Trim(), "^`|`$", string.Empty); //strip out the ` characters from the beginning and end of the string
+            }
+        }
+        */
 
         [Command("roleid")]
         [Alias("rid")]
