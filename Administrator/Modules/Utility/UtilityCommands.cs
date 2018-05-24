@@ -233,7 +233,7 @@ namespace Administrator.Modules.Utility
                 .WithDescription(
                     $"I'm a multipurpose bot created by {app.Owner} for the /r/tf2 Discord, gone global!\n" +
                     "I feature loads of commands and features, but alas I am still a work in progress.")
-                .AddField("🗒 Command List", "For a detailed command list, check out [this link.]()")
+                .AddField("🗒 Command List", "For a detailed command list, check out [this link.](https://github.com/QuantumToasted/Administrator/wiki/Command-List)")
                 .AddField($"{Emote.Parse("<:TFDiscord:445038772858388480>")} Invite me!", $"To add me to your server, follow [this link](https://discordapp.com/api/oauth2/authorize?client_id={Context.Client.CurrentUser.Id}&permissions=1543892214&scope=bot) and select the guild you'd like to add me to!")
                 .AddField("❓ Quick Help", $"Available modules:\n```{string.Join(", ", modules.Select(x => x.Name))}\n```" +
                                         $"\nTo get the modules listed above from anywhere, use `{Config.BotPrefix}modules`.\n" +
