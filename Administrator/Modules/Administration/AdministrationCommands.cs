@@ -22,7 +22,7 @@ namespace Administrator.Modules.Administration
     {
         Bot,
         Pin,
-        Self
+        Me
     }
 
     [Name("Administration")]
@@ -46,7 +46,7 @@ namespace Administrator.Modules.Administration
         [Summary("Delete messages in the current channel.")]
         [Remarks("Supply a user after the amount to prune only for a user, or \"ignore [bot/pin/me]\"")]
         [Usage("{p}prune 50", "{p}prune 25 ignore pin", "{p}prune 10 @SomeSpammer")]
-        [RequireBotPermission(GuildPermission.ManageMessages)]
+        [RequireBotPermission(GuildPermission.ManageMessages | GuildPermission.ReadMessages)]
         [RequireUserPermission(GuildPermission.ManageMessages)]
         [Priority(1)]
         private async Task PruneAsync(int count, [Remainder] IUser user = null)
@@ -78,29 +78,36 @@ namespace Administrator.Modules.Administration
         [RequireBotPermission(GuildPermission.ManageMessages)]
         [RequireUserPermission(GuildPermission.ManageMessages)]
         [Priority(0)]
-        private async Task PruneAsync(int count, string isIgnore, IgnoreMode mode)
+        private async Task PruneAsync(int count, string isIgnore, string modeStr)
         {
             if (!isIgnore.Equals("ignore", StringComparison.InvariantCultureIgnoreCase)
                 || !(Context.Channel is ITextChannel chnl)) return;
 
-            var messages = await chnl.GetMessagesAsync(Context.Message, Direction.Before, count + 1).FlattenAsync()
+            modeStr = char.ToUpper(modeStr[0]) + modeStr.Substring(1).ToLower();
+            if (!Enum.TryParse(modeStr, out IgnoreMode mode)) return;
+
+            var msgs = await chnl.GetMessagesAsync(Context.Message, Direction.Before, count + 1).FlattenAsync()
                 .ConfigureAwait(false);
-            messages = messages.Where(x => DateTimeOffset.UtcNow - x.Timestamp <= TimeSpan.FromDays(14));
+            var messages = msgs.Where(x => DateTimeOffset.UtcNow - x.Timestamp <= TimeSpan.FromDays(14)).ToList();
 
             switch (mode)
             {
                 case IgnoreMode.Bot:
-                    await chnl.DeleteMessagesAsync(messages.Where(x => !x.Author.IsBot)).ConfigureAwait(false);
+                    messages = messages.Where(x => !x.Author.IsBot).ToList();
                     break;
                 case IgnoreMode.Pin:
-                    await chnl.DeleteMessagesAsync(messages.Where(x => !x.IsPinned)).ConfigureAwait(false);
+                    messages = messages.Where(x => !x.IsPinned).ToList();
                     break;
-                case IgnoreMode.Self:
-                    await chnl.DeleteMessagesAsync(messages.Where(x => x.Author.Id != Context.User.Id))
-                        .ConfigureAwait(false);
+                case IgnoreMode.Me:
+                    messages = messages.Where(x => x.Author.Id != Context.User.Id).ToList();
                     break;
             }
-            await Context.Message.DeleteAsync().ConfigureAwait(false);
+
+            if (messages.Any())
+            {
+                await chnl.DeleteMessagesAsync(messages).ConfigureAwait(false);
+                await Context.Message.DeleteAsync().ConfigureAwait(false);
+            }
         }
 
         #endregion
@@ -989,7 +996,7 @@ namespace Administrator.Modules.Administration
             else
                 eb.WithColor(color.Value);
             eb.WithTitle($"User info for {usr}")
-                .WithThumbnailUrl(usr.AvatarUrl())
+                .WithThumbnailUrl(usr.GetAvatarUrl())
                 .AddField("Mention", usr.Mention)
                 .AddField("Nickname", string.IsNullOrWhiteSpace(usr.Nickname) ? "N/A" : usr.Nickname, true)
                 .AddField("Id", usr.Id, true)

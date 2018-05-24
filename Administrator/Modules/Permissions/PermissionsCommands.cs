@@ -217,7 +217,7 @@ namespace Administrator.Modules.Permissions
         [Command("addblacklistedword")]
         [Alias("addblw", "ablw")]
         [Summary("Add a blacklisted word or words to the guild.\n" +
-                 "Any messages sent containing the word will automatically be deleted." +
+                 "Any messages sent containing the word will automatically be deleted.\n" +
                  "Users with the **PermRole** are immune to word blacklisting.")]
         [Usage("{p}ablw ass")]
         [RequireContext(ContextType.Guild)]

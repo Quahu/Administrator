@@ -1,5 +1,6 @@
 ﻿using Discord;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Administrator.Services;
@@ -123,6 +124,7 @@ namespace Administrator.Extensions
             return false;
         }
 
+        /*
         public static string AvatarUrl(this IUser usr)
         {
             return string.IsNullOrWhiteSpace(usr.AvatarId)
@@ -131,6 +133,7 @@ namespace Administrator.Extensions
                     ? $"{DiscordConfig.CDNUrl}avatars/{usr.Id}/{usr.AvatarId}.gif"
                     : $"{DiscordConfig.CDNUrl}avatars/{usr.Id}/{usr.AvatarId}.png";
         }
+        */
     }
 
 

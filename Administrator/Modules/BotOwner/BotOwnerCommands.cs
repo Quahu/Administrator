@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
@@ -18,27 +19,79 @@ using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
 using Microsoft.CodeAnalysis;
+using MoreLinq;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 
 namespace Administrator.Modules.BotOwner
 {
+    public class Globals
+    {
+        public SocketCommandContext Context { get; set; }
+        public DbService Db { get; set; }
+    }    
 
     [Name("BotOwner")]
     public class BotOwnerCommands : ModuleBase<SocketCommandContext>
     {
-        public class Globals
-        {
-            public SocketCommandContext Context;
-            public DbService Db;
-        }
-
         private static readonly Config Config = BotConfig.New();
         private readonly DbService _db;
+        private readonly CommandService _commands;
 
-        public BotOwnerCommands(DbService db)
+        public BotOwnerCommands(DbService db, CommandService commands)
         {
             _db = db;
+            _commands = commands;
+        }
+
+        [Command("gencommands")]
+        [Summary("generates the commandlist.md.")]
+        [Usage("{p}gencommands")]
+        [RequireOwner]
+        private async Task GenerateCommandlistAsync()
+        {
+            var text = string.Empty;
+            var modules = _commands.Modules.Where(x => !x.Name.Equals("BotOwner")).ToList();
+            foreach (var module in modules)
+            {
+                text += $"## {module.Name}\n" +
+                        "|Command|Summary|Usage|\n" +
+                        "|---|---|---|\n";// +
+                        //"|-| -------| ------------------------------------------\n";
+                var commands = module.Commands.DistinctBy(x => x.Name).ToList();
+                foreach (var command in commands)
+                {
+                    var name = $"`{Config.BotPrefix}{command.Name}`";
+                    var aliases = command.Aliases.Any(x => !x.Equals(command.Name))
+                        ? string.Join(string.Empty,
+                            command.Aliases.Where(x => !x.Equals(command.Name))
+                                .Select(x => $"<br>`{Config.BotPrefix}{x}`"))
+                        : "<br>";
+                    var summary = command.Summary.Replace("{p}", Config.BotPrefix).Replace("\n", "<br>");
+                    var usage = string.Join("<br>",
+                        (command.Attributes.FirstOrDefault(x => x is UsageAttribute) as UsageAttribute)?.Text
+                        .Select(x => $"`{x}`".Replace("{p}", Config.BotPrefix)));
+                    text +=$"|{name}{aliases}|{summary}|{usage}|\n";
+                }
+            }
+
+            try
+            {
+                if (File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "Data/commandlist.md")))
+                {
+                    File.Delete(Path.Combine(Directory.GetCurrentDirectory(), "Data/commandlist.md"));
+                }
+                
+                await File.WriteAllTextAsync(Path.Combine(Directory.GetCurrentDirectory(), "Data/commandlist.md"), text)
+                    .ConfigureAwait(false);
+                await Context.Channel.SendConfirmAsync("Command list generated.");
+                await Context.Channel.SendFileAsync(Path.Combine(Directory.GetCurrentDirectory(), "Data/commandlist.md"))
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await Context.Channel.SendErrorAsync($"```\n{ex}\n```").ConfigureAwait(false);
+            }
         }
 
         [Command("setgame")]
@@ -50,7 +103,7 @@ namespace Administrator.Modules.BotOwner
             // ActivityType.Playing, Listening, Watching, Streaming
             if (Enum.TryParse(args[0], out ActivityType type))
             {
-                var remainder = string.Join(" ", args.TakeLast(args.Length - 1));
+                var remainder = string.Join(" ", Enumerable.TakeLast(args, args.Length - 1));
                 await Context.Client.SetGameAsync(remainder, type: type).ConfigureAwait(false);
                 await Context.Message.AddReactionAsync(new Emoji("\U00002705")).ConfigureAwait(false);
             }

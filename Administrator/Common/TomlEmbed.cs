@@ -36,7 +36,10 @@ namespace Administrator.Common
             if (embed.Author is Author au)
                 eb.WithAuthor(au.Name, au.IconUrl);
 
-            if (embed.Fields is null || !embed.Fields.Any())
+            if (embed.Footer is Footer f)
+                eb.WithFooter(f.Text, f.IconUrl);
+
+            if (embed.Fields is null || !embed.Fields.Any()) 
                 return await channel.SendMessageAsync(plaintext, embed: eb.Build()).ConfigureAwait(false);
 
             foreach (var field in embed.Fields)
@@ -70,10 +73,13 @@ namespace Administrator.Common
             if (embed.Author is Author au)
                 eb.WithAuthor(au.Name, au.IconUrl);
 
-            if (embed.Fields is null || !embed.Fields.Any())
+            if (embed.Footer is Footer f)
+                eb.WithFooter(f.Text, f.IconUrl);
+
+            if (embed.Fields is null || !embed.Fields.Any()) 
                 return (plaintext, eb);
 
-            foreach (var field in embed.Fields)
+            foreach (var field in embed.Fields.ToList())
             {
                 eb.AddField(field.Name, field.Value, field.Inline);
             }
@@ -96,9 +102,18 @@ namespace Administrator.Common
 
         public string ImageUrl { get; private set; }
 
-        public Author Author { get; private set; }
-
         public List<Field> Fields { get; private set; }
+
+        public Footer Footer { get; private set; }
+
+        public Author Author { get; private set; }
+    }
+
+    public class Footer
+    {
+        public string Text { get; private set; }
+        
+        public string IconUrl { get; private set; }
     }
 
     public class Author

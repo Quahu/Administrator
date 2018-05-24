@@ -111,7 +111,7 @@ namespace Administrator.Services
             var gc = await _db.GetOrCreateGuildConfigAsync(guild).ConfigureAwait(false);
             var eb = new EmbedBuilder()
                 .WithOkColor()
-                .WithThumbnailUrl(_client.CurrentUser.AvatarUrl())
+                .WithThumbnailUrl(_client.CurrentUser.GetAvatarUrl())
                 .WithTitle("Thanks for inviting me!")
                 .WithDescription(
                     $"I am the Administrator. I'm an all-purpose bot with some neat features, dare I say. If you would like some help to see what I can do, utilize the `{Config.BotPrefix}help` command.");
@@ -228,7 +228,7 @@ namespace Administrator.Services
                     var channel = guild.GetChannel(channelId) as ISocketMessageChannel;
                     var eb = new EmbedBuilder()
                         .WithOkColor()
-                        .WithThumbnailUrl(user.AvatarUrl())
+                        .WithThumbnailUrl(user.GetAvatarUrl())
                         .WithTitle("User unbanned")
                         .WithDescription($"{user}")
                         .AddField("ID", user.Id)
@@ -258,7 +258,7 @@ namespace Administrator.Services
                     var channel = user.Guild.GetChannel(channelId) as ISocketMessageChannel;
                     var eb = new EmbedBuilder()
                         .WithErrorColor()
-                        .WithThumbnailUrl(user.AvatarUrl())
+                        .WithThumbnailUrl(user.GetAvatarUrl())
                         .WithTitle("User left")
                         .WithDescription($"{user}")
                         .AddField("ID", user.Id)
@@ -304,7 +304,7 @@ namespace Administrator.Services
                     var channel = guild.GetChannel(channelId) as ISocketMessageChannel;
                     var eb = new EmbedBuilder()
                         .WithErrorColor()
-                        .WithThumbnailUrl(user.AvatarUrl())
+                        .WithThumbnailUrl(user.GetAvatarUrl())
                         .WithTitle("User banned")
                         .WithDescription($"{user}")
                         .AddField("ID", user.Id)
@@ -403,7 +403,7 @@ namespace Administrator.Services
                 var channel = user.Guild.GetChannel(channelId) as ISocketMessageChannel;
                 var eb = new EmbedBuilder()
                     .WithOkColor()
-                    .WithThumbnailUrl(user.AvatarUrl())
+                    .WithThumbnailUrl(user.GetAvatarUrl())
                     .WithTitle("User joined")
                     .WithDescription($"{user}")
                     .AddField("ID:", user.Id)

@@ -266,7 +266,7 @@ namespace Administrator.Modules.GuildConfig
 
         [Command("upvotearrow")]
         [Summary(
-            "Gets or sets this guild's upvote arrow. Suggestions and the {p}vote command utilize this emote. Defaults to ⬆.⬇")]
+            "Gets or sets this guild's upvote arrow. Suggestions and the {p}vote command utilize this emote. Defaults to ⬆.")]
         [Usage("{p}upvotearrow ⬆")]
         [RequirePermRole]
         private async Task GetOrSetUpvoteArrowAsync(string emoteStr)
@@ -301,7 +301,7 @@ namespace Administrator.Modules.GuildConfig
         }
 
         [Command("downvotearrow")]
-        [Summary("Gets or sets this guild's upvote arrow. Suggestions and the {p} vote command utilize this emote. Defaults to .")]
+        [Summary("Gets or sets this guild's upvote arrow. Suggestions and the {p} vote command utilize this emote. Defaults to ⬇.")]
         [Usage("{p}downvote arrow ")]
         [RequirePermRole]
         private async Task GetOrSetDownvoteArrowAsync(string emoteStr)

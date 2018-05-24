@@ -36,9 +36,9 @@ namespace Administrator.Modules.Phrases
 
         [Command("addphrase")]
         [Alias("setphrase")]
-        [Summary("Create your own personal phrase. Supply the `-u` flag to only make unique occurrences increment the counter.")]
-        [Remarks("Phrase must not contain a word or words in use by another phrase.")]
-        [Usage("{p}addphrase nice meme", "{p}addphrase -u unique phrase")]
+        [Summary("Create your own personal phrase. Messages sent in this guild containing this phrase will increment its counter.")]
+        [Remarks("Phrase must not be a phrase already in use by another user.")]
+        [Usage("{p}addphrase nice meme")]
         private async Task AddUserPhraseAsync([Remainder] string phrase)
         {
             if (isRemoving.Any(x => x == Context.User.Id))

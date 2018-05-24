@@ -221,10 +221,13 @@ namespace Administrator
                 if (result.Error != CommandError.UnknownCommand)
                 {
                     Log.CommandError(watch.ElapsedMilliseconds / 1000.0, context, result);
-                    var gc = await _db.GetOrCreateGuildConfigAsync(context.Guild).ConfigureAwait(false);
-                    if (gc.VerboseErrors)
+                    if (context.Guild is SocketGuild g)
                     {
-                        await context.Channel.SendErrorAsync(result.ErrorReason).ConfigureAwait(false);
+                        var gc = await _db.GetOrCreateGuildConfigAsync(g).ConfigureAwait(false);
+                        if (gc.VerboseErrors)
+                        {
+                            await context.Channel.SendErrorAsync(result.ErrorReason).ConfigureAwait(false);
+                        }
                     }
                 }
             }

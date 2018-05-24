@@ -45,11 +45,11 @@ namespace Administrator.Modules.Utility
 
         [Command("lookingtoplay")]
         [Alias("ltp")]
-        [Summary("Toggle \"Looking to Play\" status on yourself. This role is mentionable and lasts as long as you specify, up to and defaulting to the guild's maximum allowed time." +
+        [Summary("Toggle \"Looking to Play\" status on yourself. This role is mentionable and lasts as long as many hours you specify (default 2), up to the guild's maximum allowed time." +
                "\nTo remove the role from yourself early, simply use the command again.")]
         [Usage("{p}ltp")]
         [RequireContext(ContextType.Guild)]
-        private async Task ToggleLtpAsync(long hours = 0)
+        private async Task ToggleLtpAsync(long hours = 2)
         {
             var eb = new EmbedBuilder();
             var ltpUsers = await _db.GetAsync<LtpUser>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
@@ -128,7 +128,7 @@ namespace Administrator.Modules.Utility
                 .WithOkColor()
                 .WithAuthor(new EmbedAuthorBuilder
                 {
-                    IconUrl = Context.Client.CurrentUser.AvatarUrl(),
+                    IconUrl = Context.Client.CurrentUser.GetAvatarUrl(),
                     Name = $"{Context.Client.CurrentUser.Username} {_stats.BotVersion}"
                 })
                 .WithFooter($"Created by {app.Owner}")
@@ -138,7 +138,7 @@ namespace Administrator.Modules.Utility
                     $"{_stats.Uptime.Minutes} minutes\n" +
                     $"{_stats.Uptime.Seconds} seconds", true)
                 .AddField("Presence",
-                    $"Servers: {_stats.Guilds}\n" +
+                    $"Guilds: {_stats.Guilds}\n" +
                     $"Text channels: {_stats.TextChannels}\n" +
                     $"Voice channels: {_stats.VoiceChannels}\n" +
                     $"Total members: {_stats.Users}", true)
@@ -151,6 +151,7 @@ namespace Administrator.Modules.Utility
         [Command("getinvite")]
         [Alias("invite", "inv")]
         [Summary("Get the server invite.")]
+        [Remarks("To set the invite, use {p}invitecode.")]
         [Usage("{p}invite")]
         [RequireContext(ContextType.Guild)]
         private async Task GetInviteAsync()
@@ -208,7 +209,7 @@ namespace Administrator.Modules.Utility
             var eb = new EmbedBuilder()
                 .WithOkColor()
                 .WithTitle($"Avatar for {u}")
-                .WithImageUrl($"{u.AvatarUrl()}?size=512");
+                .WithImageUrl($"{u.GetAvatarUrl()}?size=512");
             await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
         }
 
@@ -218,38 +219,29 @@ namespace Administrator.Modules.Utility
 
         [Command("help")]
         [Alias("h")]
-        [Summary("Get DMed a list of commands or get help for an individual command.")]
-        [Usage("{p}h {p}phrase", "{p}h")]
+        [Summary("Get DMed a help message, or get help for an individual command.")]
+        [Usage("{p}h {p}phrase", "{p}help")]
         [Priority(0)]
-        [RequirePermissionsPass]
         private async Task GetHelpAsync()
         {
-            var modules = _commands.Modules.ToList();
+            var app = await Context.Client.GetApplicationInfoAsync().ConfigureAwait(false);
+            var modules = _commands.Modules.Where(x => !x.Name.Equals("BotOwner")).ToList();
             var eb = new EmbedBuilder()
                 .WithOkColor()
-                .WithTitle("Command list")
-                .WithFooter("Use {p}h {p}command to see help for a specific command.".Replace("{p}", Config.BotPrefix));
-
-            if (!Config.OwnerIds.Contains((long) Context.Message.Author.Id))
-                modules = modules.Where(x => !x.Name.Equals("BotOwner")).ToList();
-
-            foreach (var module in modules)
-            {
-                var description = "```css\n";
-
-                foreach (var cmd in module.Commands.DistinctBy(x => x.Name))
-                {
-                    var cmdName = cmd.Aliases.First();
-                    var aliasesStr = string.Empty;
-                    var cmdAliases = cmd.Aliases.Skip(1).ToList();
-                    if (cmdAliases.Count > 0)
-                        aliasesStr = $" [{Config.BotPrefix}{string.Join($"] [{Config.BotPrefix}", cmdAliases)}]";
-                    description += $"{Config.BotPrefix}{cmdName}{aliasesStr}\n";
-                }
-
-                description += "```";
-                eb.AddField(module.Name, description);
-            }
+                .WithAuthor($"Hello! I am {Context.Client.CurrentUser.Username}.",
+                    Context.Client.CurrentUser.GetAvatarUrl())
+                .WithDescription(
+                    $"I'm a multipurpose bot created by {app.Owner} for the /r/tf2 Discord, gone global!\n" +
+                    "I feature loads of commands and features, but alas I am still a work in progress.")
+                .AddField("🗒 Command List", "For a detailed command list, check out [this link.]()")
+                .AddField($"{Emote.Parse("<:TFDiscord:445038772858388480>")} Invite me!", $"To add me to your server, follow [this link](https://discordapp.com/api/oauth2/authorize?client_id={Context.Client.CurrentUser.Id}&permissions=1543892214&scope=bot) and select the guild you'd like to add me to!")
+                .AddField("❓ Quick Help", $"Available modules:\n```{string.Join(", ", modules.Select(x => x.Name))}\n```" +
+                                        $"\nTo get the modules listed above from anywhere, use `{Config.BotPrefix}modules`.\n" +
+                                        $"To get a list of commands for that module, use `{Config.BotPrefix}commands ModuleName`.\neg. `{Config.BotPrefix}commands Utility`\n\n" +
+                                        $"To get help for an __individual__ command, use `{Config.BotPrefix}help {Config.BotPrefix}commandName`. The `{Config.BotPrefix}` is not required for the command name you are searching for.")
+                .AddField("🔍 Browse the source!", "Want to see what makes me tick? Feel free to check out my [GitHub page.](https://github.com/QuantumToasted/Administrator)\n(You should also make feature requests or bug reports on the Issues page!)")
+                .AddField("🎙 Additional support",
+                    "Can't find what you're looking for? Feel free to join the [help guild.](https://discord.gg/rTvGube)");
 
             try
             {
@@ -266,9 +258,8 @@ namespace Administrator.Modules.Utility
 
         [Command("help")]
         [Alias("h")]
-        [Summary("Get DMed a list of commands or get help for an individual command.")]
-        [Usage("{p}h {p}phrase", "{p}h")]
-        [RequirePermissionsPass]
+        [Summary("Get DMed a help message, or get help for an individual command.")]
+        [Usage("{p}h {p}phrase", "{p}help")]
         private async Task GetHelpAsync(string cmd)
         {
             // !!h !!BAN
@@ -281,20 +272,25 @@ namespace Administrator.Modules.Utility
             {
                 eb.WithOkColor()
                     .WithTitle($"{{p}}{string.Join(" / {p}", command.Aliases)}".Replace("{p}", Config.BotPrefix))
-                    .WithDescription(command.Summary);
+                    .WithDescription($"{command.Summary}\n");
 
                 if (!string.IsNullOrEmpty(command.Remarks)) eb.WithFooter(command.Remarks.Replace("{p}", Config.BotPrefix));
 
-                if (command.Preconditions.Any(x => x is RequireBotPermissionAttribute))
+                if (command.Preconditions.FirstOrDefault(x => x is RequireBotPermissionAttribute)
+                    is RequireBotPermissionAttribute botPerms && botPerms.GuildPermission is GuildPermission g)
                 {
-                    var botPerms = command.Preconditions.Where(x => x is RequireBotPermissionAttribute).ToList();
-                    // do stuff with this, maybe add a field
+                    eb.Description += $"\nRequires **{string.Join("**, **", g.GetFlags())}** bot permissions.";
                 }
 
                 if (command.Preconditions.FirstOrDefault(x => x is RequireUserPermissionAttribute) is
-                    RequireUserPermissionAttribute userPerms && !(userPerms.GuildPermission is null))
+                    RequireUserPermissionAttribute userPerms && userPerms.GuildPermission is GuildPermission gp)
                 {
-                    eb.Description += $"\nRequires **{string.Join("**, **", userPerms.GuildPermission.Value.GetFlags())}** permissions.";
+                    eb.Description += $"\nRequires **{string.Join("**, **", gp.GetFlags())}** user permissions.";
+                }
+
+                if (command.Preconditions.FirstOrDefault(x => x is RequirePermRole) is RequirePermRole rp)
+                {
+                    eb.Description += "\nRequires the guild's **PermRole** to use.";
                 }
 
                 if (command.Attributes.FirstOrDefault(x => x is UsageAttribute) is UsageAttribute usage)
@@ -307,6 +303,61 @@ namespace Administrator.Modules.Utility
             else
             {
                 await Context.Channel.SendErrorAsync("Couldn't find info about that command.").ConfigureAwait(false);
+            }
+        }
+
+        [Command("modules")]
+        [Summary("Get a list of available modules.")]
+        [Usage("{p}modules")]
+        private async Task GetModulesAsync()
+        {
+            var modules = _commands.Modules.Where(x => !x.Name.Equals("BotOwner")).ToList();
+            var eb = new EmbedBuilder()
+                .WithOkColor()
+                .WithTitle("Available modules:")
+                .WithDescription($"```\n{string.Join("\n", modules.Select(x => x.Name))}\n```");
+
+            await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
+        }
+
+        [Command("commands")]
+        [Alias("cmds")]
+        [Summary("Get a list of commands for a specific module.")]
+        [Usage("{p}commands Utility")]
+        private async Task GetCommandsAsync([Remainder] string moduleName = null)
+        {
+            if (moduleName is null)
+            {
+                await Context.Channel
+                    .SendErrorAsync(
+                        $"You must supply a module name! Use `{Config.BotPrefix}modules` for a list of modules.")
+                    .ConfigureAwait(false);
+            }
+
+            if (_commands.Modules.FirstOrDefault(x =>
+                !x.Name.Equals("BotOwner", StringComparison.InvariantCultureIgnoreCase)
+                && x.Name.Equals(moduleName, StringComparison.InvariantCultureIgnoreCase)) is ModuleInfo module)
+            {
+                var description = "```css\n";
+                foreach (var command in module.Commands.DistinctBy(x => x.Name).ToList())
+                {
+                    description += $"{Config.BotPrefix}{command.Name}";
+                    foreach (var a in command.Aliases.Where(x => !x.Equals(command.Name)).ToList())
+                    {
+                        description += $" [{Config.BotPrefix}{a}]";
+                    }
+
+                    description += "\n";
+                }
+
+                description += "\n```";
+
+                var eb = new EmbedBuilder()
+                    .WithOkColor()
+                    .WithTitle($"Commands for module {module.Name}:")
+                    .WithDescription(description);
+
+                await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
             }
         }
 
@@ -327,7 +378,8 @@ namespace Administrator.Modules.Utility
                 .WithOkColor()
                 .WithAuthor(Context.Message.Author);
 
-            var guildConfig = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var suggestions = await _db.GetAsync<Suggestion>().ConfigureAwait(false);
 
             if (Context.Message.Attachments.Any())
             {
@@ -344,11 +396,18 @@ namespace Administrator.Modules.Utility
             {
                 eb.WithDescription(suggestion);
             }
+            
+            if (suggestions.OrderByDescending(x => x.Id).FirstOrDefault() is Suggestion s)
+            {
+                eb.WithFooter($"Suggestion ID: {s.Id + 1}");
+            }
+            else
+            {
+                eb.WithFooter($"Suggestion ID: 1");
+            }
 
-            var channel = Context.Channel;
-            if (Context.Guild.TryGetChannelId(guildConfig.SuggestionChannel.ToString(), out var channelId)
-                && !((Context.Guild.GetChannel(channelId) as ISocketMessageChannel) is null))
-                channel = Context.Guild.GetChannel(channelId) as ISocketMessageChannel;
+            var channel = Context.Guild.TextChannels.FirstOrDefault(x => x.Id == (ulong) gc.SuggestionChannel)
+                          ?? Context.Channel;
 
             var msg = await channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
             await _suggestions.AddNewAsync(msg, Context.User as SocketGuildUser).ConfigureAwait(false);
@@ -356,7 +415,7 @@ namespace Administrator.Modules.Utility
             await Context.Message.DeleteAsync().ConfigureAwait(false);
 
             var dm = await Context.Message.Author.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-            if (!(dm is null))
+            try
             {
                 var eb2 = new EmbedBuilder()
                     .WithOkColor()
@@ -365,6 +424,10 @@ namespace Administrator.Modules.Utility
                         "Made it by mistake or screwed up your wording or spelling? Delete it by reacting with :wastebasket: (\\:wastebasket\\:)!");
 
                 await dm.SendMessageAsync(string.Empty, embed: eb2.Build());
+            }
+            catch
+            {
+                // ignored
             }
         }
 
@@ -435,6 +498,7 @@ namespace Administrator.Modules.Utility
 
         [Command("suggestion")]
         [Summary("Approve or deny a suggestion by message ID, or show a suggestion by ID.")]
+        [Usage("{p}suggestion approve 1234567890", "{p}suggestion deny 1234567890", "{p}suggestion 5")]
         [RequireContext(ContextType.Guild)]
         [RequirePermissionsPass]
         [RequireUserPermission(GuildPermission.ManageMessages)]
@@ -442,7 +506,7 @@ namespace Administrator.Modules.Utility
         private async Task ModifySuggestionAsync(long id)
         {
             var guild = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
-            var suggestionList = await _db.GetAsync<Suggestion>(x => x.Id == id).ConfigureAwait(false);
+            var suggestionList = await _db.GetAsync<Suggestion>(x => x.Id == id && x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
 
             if (suggestionList.FirstOrDefault() is Suggestion s)
             {
@@ -494,7 +558,7 @@ namespace Administrator.Modules.Utility
                                         $"Suggestion approved with {s.Upvotes} upvotes and {s.Downvotes} downvotes."
                                 })
                                 .WithTitle(Context.Guild.GetUser((ulong) s.UserId).ToString())
-                                .WithThumbnailUrl(Context.Guild.GetUser((ulong) s.UserId).AvatarUrl())
+                                .WithThumbnailUrl(Context.Guild.GetUser((ulong) s.UserId).GetAvatarUrl())
                                 .WithDescription(s.Content);
                             if (msg.Embeds.FirstOrDefault() is Embed e
                                 && e.Image.GetValueOrDefault() is EmbedImage ei)
@@ -511,7 +575,7 @@ namespace Administrator.Modules.Utility
                                         $"Suggestion denied with {s.Upvotes} upvotes and {s.Downvotes} downvotes."
                                 })
                                 .WithTitle(Context.Guild.GetUser((ulong) s.UserId).ToString())
-                                .WithThumbnailUrl(Context.Guild.GetUser((ulong) s.UserId).AvatarUrl())
+                                .WithThumbnailUrl(Context.Guild.GetUser((ulong) s.UserId).GetAvatarUrl())
                                 .WithDescription(s.Content)
                                 .WithImageUrl(msg.Embeds.First().Image.GetValueOrDefault().Url);
                             break;

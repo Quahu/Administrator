@@ -24,7 +24,7 @@ namespace Administrator.Modules.Utility.Services
 
         public async Task AddNewAsync(IUserMessage message, SocketGuildUser author)
         {
-            var guild = await db.GetOrCreateGuildConfigAsync((message.Channel as SocketGuildChannel).Guild)
+            var guild = await db.GetOrCreateGuildConfigAsync(author.Guild)
                 .ConfigureAwait(false);
 
             await message.AddReactionAsync(DiscordExtensions.GetEmote(guild.UpvoteArrow)).ConfigureAwait(false);
@@ -51,7 +51,6 @@ namespace Administrator.Modules.Utility.Services
 
             var gc = await db.GetOrCreateGuildConfigAsync((channel as SocketGuildChannel).Guild).ConfigureAwait(false);
             var suggestions = await db.GetAsync<Suggestion>().ConfigureAwait(false);
-            var emote = reaction.Emote;
 
             if (suggestions.FirstOrDefault(x => x.MessageId == (long) msg.Id) is Suggestion s)
             {
@@ -68,7 +67,7 @@ namespace Administrator.Modules.Utility.Services
 
                     await db.UpdateAsync(s).ConfigureAwait(false);
                 }
-                else if (reaction.Emote.Equals(delet_this) && (s.UserId == (long) msg.Author.Id
+                else if (reaction.Emote.Equals(delet_this) && (s.UserId == (long) reaction.UserId
                          || reaction.User.IsSpecified && (reaction.User.Value as SocketGuildUser).Roles.Any(x => x.Id == (ulong) gc.PermRole)))
                 {
                     await db.DeleteAsync(s).ConfigureAwait(false);

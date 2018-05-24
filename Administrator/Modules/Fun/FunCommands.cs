@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Administrator.Common;
 using Administrator.Extensions;
 using Administrator.Extensions.Attributes;
 using Administrator.Services;
@@ -11,6 +13,7 @@ using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
 using MoreLinq;
+using Nett;
 
 namespace Administrator.Modules.Fun
 {
@@ -24,6 +27,8 @@ namespace Administrator.Modules.Fun
     [Name("Fun")]
     public class FunCommands : ModuleBase<SocketCommandContext>
     {
+        private static readonly Tips Tips =
+            Toml.ReadFile<Tips>(Path.Combine(Directory.GetCurrentDirectory(), "Data/Tips.toml"));
         private static readonly Config Config = BotConfig.New();
         private readonly DbService _db;
         private readonly RandomService _random;
@@ -164,7 +169,7 @@ namespace Administrator.Modules.Fun
                 .WithOkColor()
                 .WithAuthor(new EmbedAuthorBuilder
                 {
-                    IconUrl = Context.Message.Author.AvatarUrl(),
+                    IconUrl = Context.Message.Author.GetAvatarUrl(),
                     Name = $"{Context.Message.Author} wants to call a vote:"
                 });
 
@@ -274,8 +279,98 @@ namespace Administrator.Modules.Fun
 
             await Context.Channel.EmbedAsync(new EmbedBuilder()
                 .WithOkColor()
-                .WithDescription($":thinking: I choose...**{options[_random.Next(0, (uint) options.Count - 1)]}**!")
+                .WithDescription($":thinking: I choose...**{options[_random.Next(0, (uint) options.Count - 1)].Trim()}**!")
                 .Build()).ConfigureAwait(false);
+        }
+
+        [Command("randomtip")]
+        [Alias("tip")]
+        [Summary("Get a random TF2 class tip. You may supply a class name to get a tip for that class.")]
+        [Usage("{p}tip", "{p}tip scout")]
+        [RequirePermissionsPass]
+        [Priority(1)]
+        private async Task GetRandomTipAsync()
+        {
+            var classes = new[]
+            {
+                "scout",
+                "soldier",
+                "pyro",
+                "demoman",
+                "heavy",
+                "engineer",
+                "medic",
+                "sniper",
+                "spy"
+            };
+
+            await GetRandomTipAsync(classes[_random.Next(0, (uint) classes.Length - 1)]).ConfigureAwait(false);
+        }
+
+        [Command("randomtip")]
+        [Alias("tip")]
+        [Summary("Get a random TF2 class tip. You may supply a class name to get a tip for that class.")]
+        [Usage("{p}tip", "{p}tip scout")]
+        [RequirePermissionsPass]
+        [Priority(0)]
+        private async Task GetRandomTipAsync(string className)
+        {
+            className = className.ToLower();
+            var eb = new EmbedBuilder()
+                .WithOkColor();
+
+            switch (className)
+            {
+                case "scunt":
+                case "scout":
+                    eb.WithDescription(Tips.Scout[_random.Next(0, (uint) Tips.Scout.Count - 1)]);
+                    eb.WithThumbnailUrl("https://i.imgur.com/bNxEbeJ.png");
+                    break;
+                case "solly":
+                case "soldier":
+                    eb.WithDescription(Tips.Soldier[_random.Next(0, (uint) Tips.Soldier.Count - 1)]);
+                    eb.WithThumbnailUrl("https://i.imgur.com/8awnLLv.png");
+                    break;
+                case "satan":
+                case "pyro":
+                    eb.WithDescription(Tips.Pyro[_random.Next(0, (uint) Tips.Pyro.Count - 1)]);
+                    eb.WithThumbnailUrl("https://i.imgur.com/A7SS2RU.png");
+                    break;
+                case "demo":
+                case "demoman":
+                    eb.WithDescription(Tips.Demoman[_random.Next(0, (uint) Tips.Demoman.Count - 1)]);
+                    eb.WithThumbnailUrl("https://i.imgur.com/FteqlqU.png");
+                    break;
+                case "hoovy":
+                case "heavy":
+                    eb.WithDescription(Tips.Heavy[_random.Next(0, (uint) Tips.Heavy.Count - 1)]);
+                    eb.WithThumbnailUrl("https://i.imgur.com/mIrG4u6.png");
+                    break;
+                case "engi":
+                case "engineer":
+                    eb.WithDescription(Tips.Engineer[_random.Next(0, (uint) Tips.Engineer.Count - 1)]);
+                    eb.WithThumbnailUrl("https://i.imgur.com/Y3PvG1R.png");
+                    break;
+                case "med":
+                case "medic":
+                    eb.WithDescription(Tips.Medic[_random.Next(0, (uint) Tips.Medic.Count - 1)]);
+                    eb.WithThumbnailUrl("https://i.imgur.com/1sQ09VE.png");
+                    break;
+                case "snoipah":
+                case "sniper":
+                    eb.WithDescription(Tips.Sniper[_random.Next(0, (uint) Tips.Sniper.Count - 1)]);
+                    eb.WithThumbnailUrl("https://i.imgur.com/okNSUTy.png");
+                    break;
+                case "shpee":
+                case "spy":
+                    eb.WithDescription(Tips.Spy[_random.Next(0, (uint) Tips.Spy.Count - 1)]);
+                    eb.WithThumbnailUrl("https://i.imgur.com/sMdArkZ.png");
+                    break;
+                default:
+                    return;
+            }
+
+            await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
         }
 
         [Command("rate")]
