@@ -8,7 +8,7 @@ namespace Administrator.Services
 {
     public class StatsService
     {
-        private const string BOT_VERSION = "1.2.0";
+        private const string BOT_VERSION = "1.2.1";
         private readonly BaseSocketClient _client;
         private readonly DateTimeOffset _dt;
 

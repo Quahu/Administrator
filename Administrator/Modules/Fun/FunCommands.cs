@@ -9,6 +9,7 @@ using Administrator.Extensions;
 using Administrator.Extensions.Attributes;
 using Administrator.Services;
 using Administrator.Services.Database;
+using Administrator.Services.Database.Models;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
@@ -65,6 +66,27 @@ namespace Administrator.Modules.Fun
             _random = random;
             _logging = logging;
             _crosstalk = crosstalk;
+        }
+
+        [Command("respects")]
+        [Summary("Show global respects stats.")]
+        [Usage("{p}respects")]
+        [RequirePermissionsPass]
+        private async Task GetRespectsAsync()
+        {
+            var respects = await _db.GetAsync<Respects>().ConfigureAwait(false);
+
+            var eb = new EmbedBuilder()
+                .WithOkColor()
+                .WithTitle("Respects stats")
+                .WithDescription($"Total respects paid to date: {respects.Count}\n" +
+                                 $"Total respects paid today: {respects.Count(x => x.Timestamp.Day == DateTimeOffset.UtcNow.Day)}")
+                .AddField("Top guilds", string.Join("\n", Context.Client.Guilds
+                    .Where(x => respects.GroupBy(y => y.GuildId)
+                                    .OrderByDescending(y => y.Count())
+                                    .FirstOrDefault()?
+                                    .FirstOrDefault()?.GuildId == (long) x.Id).Take(5)
+                    .Select(x => x.Name.SanitizeMentions())));
         }
 
         [Command("crosstalk", RunMode = RunMode.Async)]

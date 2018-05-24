@@ -202,13 +202,10 @@ namespace Administrator
                         UserId = (long) msg.Author.Id
                     };
                     await _db.InsertAsync(r).ConfigureAwait(false);
-                    var eb = new EmbedBuilder()
-                        .WithOkColor()
-                        .WithDescription(
-                            $"**{msg.Author}** has paid their respects ({respects.Count(x => x.Timestamp.Day == DateTimeOffset.UtcNow.Day) + 1} today).")
-                        .WithFooter($"{respects.Count + 1} total respects paid.");
-
-                    await msg.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
+                    await msg.Channel
+                        .SendConfirmAsync(
+                            $"**{msg.Author}** has paid their respects today ({respects.Count(x => x.Timestamp.Day == DateTimeOffset.UtcNow.Day) + 1} total today).")
+                        .ConfigureAwait(false);
                 });
                 return;
             }

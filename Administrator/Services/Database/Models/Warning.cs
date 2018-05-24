@@ -13,6 +13,8 @@ namespace Administrator.Services.Database.Models
 
         public DateTimeOffset TimeGiven { get; set; } = DateTimeOffset.UtcNow;
 
+        public long GuildId { get; set; }
+
         public long ReceiverId { get; set; }
 
         public long IssuerId { get; set; }

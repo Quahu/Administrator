@@ -101,7 +101,7 @@ namespace Administrator.Modules.ReactionRoles
 
             if (msg is null)
             {
-                await Context.Channel.SendErrorAsync("Could not find a message to listen on in that channel.").ConfigureAwait(false);
+                await Context.Channel.SendErrorAsync("Could not find a message to listen on in that channel. It may not be cached, try sending a new message and using that one.").ConfigureAwait(false);
                 return;
             }
 
@@ -114,7 +114,6 @@ namespace Administrator.Modules.ReactionRoles
                 return;
             }
 
-            await _reaction.AddListenerAsync(msg, Context.Guild, roles, emotes).ConfigureAwait(false);
             var desc = string.Empty;
 
             for (var i = 0; i < emotes.Count; i++)
@@ -122,13 +121,16 @@ namespace Administrator.Modules.ReactionRoles
                 desc += $"{emotes[i]} => {roles[i].Name}\n";
             }
 
+            var edit = await Context.Channel.SendConfirmAsync("Building reaction role listener. Please wait.");
+            await _reaction.AddListenerAsync(msg, Context.Guild, roles, emotes).ConfigureAwait(false);
+
             var eb = new EmbedBuilder()
                 .WithOkColor()
                 .WithTitle($"Successfully added a reaction role listener! ID: {msg.Id}")
                 .WithDescription(desc)
                 .WithFooter("If any of the above looks wrong, remove the listener, check inputs, and try again.");
 
-            await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
+            await edit.ModifyAsync(x => x.Embed = eb.Build()).ConfigureAwait(false);
         }
 
         [Command("removereactionrole")]

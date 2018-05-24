@@ -49,6 +49,14 @@ namespace Administrator.Extensions
             }
         }
 
+        public static async Task<IUserMessage> SendErrorAsync(this IMessageChannel channel, string error)
+            => await channel.EmbedAsync(new EmbedBuilder().WithErrorColor().WithDescription(error).Build())
+            .ConfigureAwait(false);
+
+        public static async Task<IUserMessage> SendConfirmAsync(this IMessageChannel channel, string message)
+            => await channel.EmbedAsync(new EmbedBuilder().WithOkColor().WithDescription(message).Build())
+                .ConfigureAwait(false);
+
         public static async Task SendErrorAsync(this IMessageChannel channel, string error, TimeSpan? deleteAfter = null)
         {
             var msg = await channel.EmbedAsync(new EmbedBuilder().WithErrorColor().WithDescription(error).Build())

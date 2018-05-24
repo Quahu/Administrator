@@ -28,17 +28,21 @@ namespace Administrator.Extensions.Attributes
                     .WithErrorColor()
                     .WithDescription(
                         $"This guild has not set up their permrole yet!\nUse `{Config.BotPrefix}permrole Your PermRole Here` to set it.")
-                    .WithFooter("Contact a user with Administrator permissions.");
+                    .WithFooter("Contact a user with Administrator permissions or the guild owner.");
                 await context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
                 return PreconditionResult.FromError("Guild has not set up permrole.");
             }
 
-            if (context.User is SocketGuildUser user)
-                return user.Roles.Any(x => x.Id == permRole.Id)
-                    ? PreconditionResult.FromSuccess()
-                    : PreconditionResult.FromError("User does not have permrole.");
+            if (!(context.User is SocketGuildUser user))
+                return PreconditionResult.FromError("Internal error. Please report this.");
 
-            return PreconditionResult.FromError("Internal error. Please report this.");
+            if (user.Roles.Any(x => x.Id == permRole.Id))
+            {
+                return PreconditionResult.FromSuccess();
+            }
+
+            await context.Channel.SendErrorAsync("You do not have the guild's permrole!").ConfigureAwait(false);
+            return PreconditionResult.FromError("User does not have permrole.");
         }
     }
 }

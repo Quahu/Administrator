@@ -30,7 +30,7 @@ namespace Administrator.Modules.GuildConfig
         }
 
         [Command("permrole")]
-        [Summary("Gets or sets this guild's permrole. The permrole is needed for many administrative commands.\nSetting the permrole requires **Administrator** permissions.")]
+        [Summary("Gets or sets this guild's permrole. The permrole is needed for many administrative commands.\nSetting the permrole requires **Administrator** permissions or guild ownership.")]
         [Usage("{p}permrole Admin")]
         private async Task GetOrSetPermRoleAsync([Remainder] string role = null)
         {
@@ -51,10 +51,10 @@ namespace Administrator.Modules.GuildConfig
                 return;
             }
 
-            if (user.Roles.All(x => !x.Permissions.Administrator))
+            if (user.Roles.All(x => !x.Permissions.Administrator) || Context.Guild.OwnerId != user.Id)
             {
                 await Context.Channel
-                    .SendErrorAsync("You must have **Administrator** permissions to set your guild's permrole!")
+                    .SendErrorAsync("You must have **Administrator** permissions (or be the guild owner) to set the permrole!")
                     .ConfigureAwait(false);
                 return;
             }

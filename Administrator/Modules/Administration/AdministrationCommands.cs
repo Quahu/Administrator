@@ -129,7 +129,7 @@ namespace Administrator.Modules.Administration
             if (receiver.Id == Context.Message.Author.Id)
             {
                 inChannel.WithErrorColor()
-                    .WithDescription("You can't warn yourself. Idiot.");
+                    .WithDescription("You can't warn yourself, idiot.");
                 await Context.Channel.EmbedAsync(inChannel.Build()).ConfigureAwait(false);
                 return;
             }
@@ -137,7 +137,7 @@ namespace Administrator.Modules.Administration
             if (issuer.Hierarchy <= receiver.Hierarchy)
             {
                 inChannel.WithErrorColor()
-                    .WithDescription("You can't warn someone of the same rank as you or higher. Idiot.");
+                    .WithDescription("You can't warn someone of the same rank as you or higher, idiot.");
                 await Context.Channel.EmbedAsync(inChannel.Build()).ConfigureAwait(false);
                 return;
             }
@@ -151,6 +151,7 @@ namespace Administrator.Modules.Administration
             {
                 IssuerId = (long) Context.User.Id,
                 ReceiverId = (long) receiver.Id,
+                GuildId = (long) Context.Guild.Id,
                 Reason = reason
             };
 
@@ -235,7 +236,7 @@ namespace Administrator.Modules.Administration
             var eb = new EmbedBuilder()
                 .WithWarnColor();
 
-            var userWarnings = await db.GetAsync<Warning>(x => x.ReceiverId == (long) receiver.Id).ConfigureAwait(false);
+            var userWarnings = await db.GetAsync<Warning>(x => x.ReceiverId == (long) receiver.Id && x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
 
             eb.WithTitle($"Warnings for user {receiver}")
                 .WithDescription("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬");
@@ -255,7 +256,7 @@ namespace Administrator.Modules.Administration
         {
             var eb = new EmbedBuilder()
                 .WithWarnColor();
-            var userWarnings = await db.GetAsync<Warning>(x => x.IssuerId == (long) Context.User.Id).ConfigureAwait(false);
+            var userWarnings = await db.GetAsync<Warning>(x => x.IssuerId == (long) Context.User.Id && x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
 
             userWarnings = userWarnings.OrderByDescending(x => x.TimeGiven)
                 .Skip(page - 1)
