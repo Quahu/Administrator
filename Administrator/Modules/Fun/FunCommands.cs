@@ -74,18 +74,27 @@ namespace Administrator.Modules.Fun
         private async Task GetRespectsAsync()
         {
             var respects = await _db.GetAsync<Respects>().ConfigureAwait(false);
+            var today = DateTimeOffset.UtcNow;
+            var timeTilTomorrow = new DateTimeOffset()
+                .AddYears(today.Year)
+                .AddDays(today.DayOfYear + 1) - today;
+            var timeleft =
+                $"{(timeTilTomorrow.Hours > 1 ? $"{timeTilTomorrow.Hours} hours, " : string.Empty)}{timeTilTomorrow.Minutes} minutes{(timeTilTomorrow.Hours > 0 ? "," : string.Empty)} and {timeTilTomorrow.Seconds} seconds.";
+
+            var temp2 = respects.GroupBy(x => x.GuildId).ToList();
+            var temp3 = temp2.OrderByDescending(x => x.Count()).ToList();
+            var temp4 = temp3.Select(x => new {Respects = x.FirstOrDefault(), Count = x.Count()}).ToList();
+            var temp5 = temp4.Where(x => Context.Client.Guilds.Any(y => x.Respects.GuildId == (long) y.Id))
+                .Take(5)
+                .ToList();
 
             var eb = new EmbedBuilder()
                 .WithOkColor()
-                .WithTitle("Respects stats")
+                .WithTitle("Respects stats:")
                 .WithDescription($"Total respects paid to date: {respects.Count}\n" +
                                  $"Total respects paid today: {respects.Count(x => x.Timestamp.Day == DateTimeOffset.UtcNow.Day)}")
-                .AddField("Top guilds to date:", string.Join("\n", Context.Client.Guilds
-                    .Where(x => respects.GroupBy(y => y.GuildId)
-                                    .OrderByDescending(y => y.Count())
-                                    .FirstOrDefault()?
-                                    .FirstOrDefault()?.GuildId == (long) x.Id).Take(5)
-                    .Select(x => x.Name)));
+                .AddField("Top guilds to date:", string.Join("\n", temp5.Select(x => $"{Context.Client.GetGuild((ulong) x.Respects.GuildId)?.Name} - {x.Count}")))
+                .WithFooter($"Respects reset in {timeleft}");
             await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
         }
 
