@@ -1,12 +1,9 @@
-﻿using System;
+﻿using Administrator.Extensions;
+using Discord.WebSocket;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection.Metadata.Ecma335;
 using System.Threading.Tasks;
-using System.Xml;
-using Administrator.Extensions;
-using Discord;
-using Discord.WebSocket;
 
 namespace Administrator.Services
 {

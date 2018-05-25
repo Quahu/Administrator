@@ -1,8 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using Nett;
+using System.Collections.Generic;
 using System.IO;
-using Nett;
 
-namespace Administrator.Services
+namespace Administrator.Common
 {
     public class BotConfig
     {

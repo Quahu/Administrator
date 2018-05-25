@@ -1,11 +1,10 @@
-﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
-using Administrator.Extensions;
+﻿using Administrator.Extensions;
 using Administrator.Services.Database;
 using Administrator.Services.Database.Models;
 using Discord;
 using Discord.WebSocket;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Administrator.Modules.Utility.Services
 {

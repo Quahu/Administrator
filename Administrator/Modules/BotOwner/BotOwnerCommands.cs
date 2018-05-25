@@ -1,27 +1,17 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using Administrator.Common;
+﻿using Administrator.Common;
 using Administrator.Extensions;
 using Administrator.Extensions.Attributes;
-using Administrator.Services;
 using Administrator.Services.Database;
 using Discord;
 using Discord.Commands;
-using Discord.WebSocket;
-using Microsoft.CodeAnalysis;
-using MoreLinq;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
+using MoreLinq;
+using System;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace Administrator.Modules.BotOwner
 {

@@ -1,11 +1,9 @@
-﻿using Discord;
+﻿using Administrator.Common;
+using Discord;
+using Discord.WebSocket;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Administrator.Services;
-using Discord.WebSocket;
-using Nett;
 
 namespace Administrator.Extensions
 {

@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Administrator.Common;
+﻿using Administrator.Common;
 using Administrator.Extensions;
 using Administrator.Extensions.Attributes;
 using Administrator.Services;
@@ -13,8 +7,13 @@ using Administrator.Services.Database.Models;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
-using MoreLinq;
 using Nett;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace Administrator.Modules.Fun
 {
@@ -81,12 +80,13 @@ namespace Administrator.Modules.Fun
                 .WithTitle("Respects stats")
                 .WithDescription($"Total respects paid to date: {respects.Count}\n" +
                                  $"Total respects paid today: {respects.Count(x => x.Timestamp.Day == DateTimeOffset.UtcNow.Day)}")
-                .AddField("Top guilds", string.Join("\n", Context.Client.Guilds
+                .AddField("Top guilds to date:", string.Join("\n", Context.Client.Guilds
                     .Where(x => respects.GroupBy(y => y.GuildId)
                                     .OrderByDescending(y => y.Count())
                                     .FirstOrDefault()?
                                     .FirstOrDefault()?.GuildId == (long) x.Id).Take(5)
-                    .Select(x => x.Name.SanitizeMentions())));
+                    .Select(x => x.Name)));
+            await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
         }
 
         [Command("crosstalk", RunMode = RunMode.Async)]

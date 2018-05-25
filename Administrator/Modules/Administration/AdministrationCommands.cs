@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection.Metadata.Ecma335;
-using System.Security.Cryptography.X509Certificates;
-using System.Threading.Tasks;
-using Administrator.Common;
+﻿using Administrator.Common;
 using Administrator.Extensions;
 using Administrator.Extensions.Attributes;
 using Administrator.Services;
@@ -14,7 +8,9 @@ using Discord;
 using Discord.Commands;
 using Discord.Rest;
 using Discord.WebSocket;
-using Nett;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Administrator.Modules.Administration
 {

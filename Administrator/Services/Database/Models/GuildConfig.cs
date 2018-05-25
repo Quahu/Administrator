@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using Discord;
-using SQLite;
+﻿using SQLite;
 
 namespace Administrator.Services.Database.Models
 {

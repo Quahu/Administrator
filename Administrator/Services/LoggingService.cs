@@ -1,17 +1,15 @@
-﻿using Administrator.Extensions;
+﻿using Administrator.Common;
+using Administrator.Extensions;
 using Administrator.Services.Database;
+using Administrator.Services.Database.Models;
 using Discord;
+using Discord.Commands;
 using Discord.WebSocket;
 using NLog;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
-using Administrator.Services.Database.Models;
-using Discord.Commands;
-using Administrator.Common;
-using Discord.Rest;
 
 namespace Administrator.Services
 {

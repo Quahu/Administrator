@@ -1,6 +1,4 @@
-﻿using System;
-using System.Reflection;
-using System.Threading.Tasks;
+﻿using Administrator.Common;
 using Administrator.Modules.Utility.Services;
 using Administrator.Services;
 using Administrator.Services.Database;
@@ -11,6 +9,9 @@ using Discord.Commands;
 using Discord.WebSocket;
 using Microsoft.Extensions.DependencyInjection;
 using NLog;
+using System;
+using System.Reflection;
+using System.Threading.Tasks;
 
 namespace Administrator
 {

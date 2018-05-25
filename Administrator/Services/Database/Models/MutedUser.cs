@@ -1,6 +1,5 @@
-﻿using System;
-using System.Net.Security;
-using SQLite;
+﻿using SQLite;
+using System;
 
 namespace Administrator.Services.Database.Models
 {

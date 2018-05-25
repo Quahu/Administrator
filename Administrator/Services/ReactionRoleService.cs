@@ -1,15 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Administrator.Extensions;
-using Administrator.Services.Database;
+﻿using Administrator.Services.Database;
 using Administrator.Services.Database.Models;
 using Discord;
 using Discord.WebSocket;
-using MoreLinq;
 using NLog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Administrator.Services
 {

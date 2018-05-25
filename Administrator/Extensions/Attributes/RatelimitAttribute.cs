@@ -1,10 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Administrator.Services;
+﻿using Administrator.Services;
 using Discord;
 using Discord.Commands;
 using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Administrator.Extensions.Attributes
 {

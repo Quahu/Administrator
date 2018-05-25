@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
-using Administrator.Common;
+﻿using Administrator.Common;
 using Administrator.Extensions;
 using Administrator.Extensions.Attributes;
 using Administrator.Services;
@@ -13,7 +6,9 @@ using Administrator.Services.Database;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
-using Nett;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Administrator.Modules.GuildConfig
 {

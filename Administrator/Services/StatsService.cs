@@ -1,14 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Discord.WebSocket;
+using System;
 using System.Linq;
-using System.Text;
-using Discord.WebSocket;
 
 namespace Administrator.Services
 {
     public class StatsService
     {
-        private const string BOT_VERSION = "1.2.1";
+        private const string BOT_VERSION = "1.2.2";
         private readonly BaseSocketClient _client;
         private readonly DateTimeOffset _dt;
 

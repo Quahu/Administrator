@@ -1,10 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Administrator.Extensions;
+﻿using Administrator.Extensions;
 using Discord;
 using SQLite;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Administrator.Services.Database.Models
 {

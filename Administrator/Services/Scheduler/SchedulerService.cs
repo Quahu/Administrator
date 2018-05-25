@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
-using Administrator.Services.Database;
+﻿using Administrator.Services.Database;
 using Administrator.Services.Scheduler.Schedules;
 using Discord.WebSocket;
 using FluentScheduler;
 using NLog;
+using System.Threading.Tasks;
 
 namespace Administrator.Services.Scheduler
 {
