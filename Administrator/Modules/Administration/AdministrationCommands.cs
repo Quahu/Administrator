@@ -9,8 +9,11 @@ using Discord.Commands;
 using Discord.Rest;
 using Discord.WebSocket;
 using System;
+using System.Collections;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using Administrator.Modules.Administration.Services;
 
 namespace Administrator.Modules.Administration
 {
@@ -26,13 +29,15 @@ namespace Administrator.Modules.Administration
     public class AdministrationCommands : ModuleBase<SocketCommandContext>
     {
         private static readonly Config Config = BotConfig.New();
-        private readonly DbService db;
-        private readonly LoggingService logging;
+        private readonly DbService _db;
+        private readonly LoggingService _logging;
+        private readonly ChannelLockService _lock;
 
-        public AdministrationCommands(DbService db, LoggingService logging)
+        public AdministrationCommands(DbService db, LoggingService logging, ChannelLockService @lock)
         {
-            this.db = db;
-            this.logging = logging;
+            _db = db;
+            _logging = logging;
+            _lock = @lock;
         }
 
         #region Prune
@@ -52,16 +57,21 @@ namespace Administrator.Modules.Administration
             if (user is null)
             {
                 var messages = await chnl.GetMessagesAsync(Context.Message, Direction.Before, count + 1).FlattenAsync().ConfigureAwait(false);
-                await chnl.DeleteMessagesAsync(messages.Where(x => DateTimeOffset.UtcNow - x.Timestamp <= TimeSpan.FromDays(14))).ConfigureAwait(false);
+                var allMessages = messages.Where(x => DateTimeOffset.UtcNow - x.Timestamp <= TimeSpan.FromDays(14))
+                    .ToList();
+                _logging.AddIgnoredMessages(allMessages);
+                await chnl.DeleteMessagesAsync(allMessages).ConfigureAwait(false);
                 await Context.Message.DeleteAsync().ConfigureAwait(false);
                 return;
             }
 
             var m = await Context.Channel.GetMessagesAsync(Context.Message, Direction.Before, 1000).FlattenAsync()
                 .ConfigureAwait(false);
-
-            await chnl.DeleteMessagesAsync(m.Where(x =>
-                    x.Author.Id == user.Id && DateTimeOffset.UtcNow - x.Timestamp <= TimeSpan.FromDays(14)).Take(count))
+            var toDelete = m.Where(x =>
+                    x.Author.Id == user.Id && DateTimeOffset.UtcNow - x.Timestamp <= TimeSpan.FromDays(14)).Take(count)
+                .ToList();
+            _logging.AddIgnoredMessages(toDelete);
+            await chnl.DeleteMessagesAsync(toDelete)
                 .ConfigureAwait(false);
             await Context.Message.DeleteAsync().ConfigureAwait(false);
         }
@@ -101,6 +111,7 @@ namespace Administrator.Modules.Administration
 
             if (messages.Any())
             {
+                _logging.AddIgnoredMessages(messages);
                 await chnl.DeleteMessagesAsync(messages).ConfigureAwait(false);
                 await Context.Message.DeleteAsync().ConfigureAwait(false);
             }
@@ -151,7 +162,7 @@ namespace Administrator.Modules.Administration
                 Reason = reason
             };
 
-            await db.InsertAsync(warning).ConfigureAwait(false);
+            await _db.InsertAsync(warning).ConfigureAwait(false);
 
             /*
             if (!receiver.Equals(Context.Message.Author) && !(receiver as SocketGuildUser).GuildPermissions.Has(GuildPermission.BanMembers))
@@ -167,8 +178,8 @@ namespace Administrator.Modules.Administration
             }
             */
 
-            var warnings = await db.GetAsync<Warning>(x => x.ReceiverId == (long) receiver.Id).ConfigureAwait(false);
-            var warningPunishments = await db.GetAsync<WarningPunishment>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
+            var warnings = await _db.GetAsync<Warning>(x => x.ReceiverId == (long) receiver.Id).ConfigureAwait(false);
+            var warningPunishments = await _db.GetAsync<WarningPunishment>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
 
             if (warningPunishments.FirstOrDefault(wp => warnings.Count == wp.Count) is WarningPunishment punishment)
             {
@@ -232,7 +243,7 @@ namespace Administrator.Modules.Administration
             var eb = new EmbedBuilder()
                 .WithWarnColor();
 
-            var userWarnings = await db.GetAsync<Warning>(x => x.ReceiverId == (long) receiver.Id && x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
+            var userWarnings = await _db.GetAsync<Warning>(x => x.ReceiverId == (long) receiver.Id && x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
 
             eb.WithTitle($"Warnings for user {receiver}")
                 .WithDescription("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬");
@@ -252,7 +263,7 @@ namespace Administrator.Modules.Administration
         {
             var eb = new EmbedBuilder()
                 .WithWarnColor();
-            var userWarnings = await db.GetAsync<Warning>(x => x.IssuerId == (long) Context.User.Id && x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
+            var userWarnings = await _db.GetAsync<Warning>(x => x.IssuerId == (long) Context.User.Id && x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
 
             userWarnings = userWarnings.OrderByDescending(x => x.TimeGiven)
                 .Skip(page - 1)
@@ -274,13 +285,13 @@ namespace Administrator.Modules.Administration
         [Priority(1)]
         private async Task ClearWarningAsync(IUser user)
         {
-            var userWarnings = await db.GetAsync<Warning>(x => x.ReceiverId == (long) user.Id).ConfigureAwait(false);
+            var userWarnings = await _db.GetAsync<Warning>(x => x.ReceiverId == (long) user.Id).ConfigureAwait(false);
             if (userWarnings.Any())
             {
                 var eb = new EmbedBuilder()
                     .WithWarnColor()
                     .WithDescription($"All warnings cleared for user **{user}**.");
-                foreach (var warning in userWarnings) await db.DeleteAsync(warning).ConfigureAwait(false);
+                foreach (var warning in userWarnings) await _db.DeleteAsync(warning).ConfigureAwait(false);
 
                 await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
             }
@@ -293,7 +304,7 @@ namespace Administrator.Modules.Administration
         [Priority(0)]
         private async Task ClearWarningAsync(long id)
         {
-            var allWarnings = await db.GetAsync<Warning>(x => x.Id == id).ConfigureAwait(false);
+            var allWarnings = await _db.GetAsync<Warning>(x => x.Id == id).ConfigureAwait(false);
 
             if (allWarnings.FirstOrDefault() is Warning w)
             {
@@ -302,7 +313,7 @@ namespace Administrator.Modules.Administration
                     .WithTitle($"Removed warning with ID {w.Id}:")
                     .AddField($"Id: {w.Id} | {w.TimeGiven:g} | Given by {Context.Guild.GetUser((ulong)w.IssuerId)}",
                         $"**Reason:** {w.Reason}\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬");
-                await db.DeleteAsync(w).ConfigureAwait(false);
+                await _db.DeleteAsync(w).ConfigureAwait(false);
                 await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
             }
         }
@@ -316,18 +327,18 @@ namespace Administrator.Modules.Administration
         [Priority(1)]
         private async Task ModifyPunishmentAsync(long count)
         {
-            var warningPunishments = await db.GetAsync<WarningPunishment>(x => x.GuildId == (long) Context.Guild.Id);
-            var gc = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var warningPunishments = await _db.GetAsync<WarningPunishment>(x => x.GuildId == (long) Context.Guild.Id);
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
 
             if (warningPunishments.FirstOrDefault(x => x.Count == count && x.GuildId == (long) Context.Guild.Id) is WarningPunishment wp)
             {
-                await db.DeleteAsync(wp).ConfigureAwait(false);
+                await _db.DeleteAsync(wp).ConfigureAwait(false);
                 var eb = new EmbedBuilder()
                     .WithWarnColor()
                     .WithDescription($"I will no longer apply a punishment to users who reach **{wp.Count}** warning(s).");
                 await Context.Channel.EmbedAsync(eb.Build()).ConfigureAwait(false);
                 gc.HasModifiedWarningPunishments = true;
-                await db.UpdateAsync(gc).ConfigureAwait(false);
+                await _db.UpdateAsync(gc).ConfigureAwait(false);
             }
         }
 
@@ -343,17 +354,17 @@ namespace Administrator.Modules.Administration
             if (count < 1) return;
             type = type[0].ToString().ToUpper() + type.Substring(1).ToLower();
             var eb = new EmbedBuilder();
-            var gc = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
             if (Enum.TryParse(type, out Punishment punishment))
             {
-                var wps = await db
+                var wps = await _db
                     .GetAsync<WarningPunishment>(x => x.GuildId == (long) Context.Guild.Id && x.Count == count)
                     .ConfigureAwait(false);
 
                 if (wps.FirstOrDefault() is WarningPunishment wp)
                 {
                     wp.PunishmentId = (long) punishment;
-                    await db.UpdateAsync(wp).ConfigureAwait(false);
+                    await _db.UpdateAsync(wp).ConfigureAwait(false);
                 }
                 else
                 {
@@ -363,7 +374,7 @@ namespace Administrator.Modules.Administration
                         GuildId = (long) Context.Guild.Id,
                         PunishmentId = (long) punishment
                     };
-                    await db.InsertAsync(newWp).ConfigureAwait(false);
+                    await _db.InsertAsync(newWp).ConfigureAwait(false);
                 }
 
                 eb.WithOkColor()
@@ -371,7 +382,7 @@ namespace Administrator.Modules.Administration
                         $"I will now apply punishment **{punishment}** to users who reach {count} warnings.");
 
                 gc.HasModifiedWarningPunishments = true;
-                await db.UpdateAsync(gc).ConfigureAwait(false);
+                await _db.UpdateAsync(gc).ConfigureAwait(false);
             }
             else
             {
@@ -389,7 +400,7 @@ namespace Administrator.Modules.Administration
         [RequireUserPermission(GuildPermission.BanMembers)]
         private async Task ListWarningPunishmentsAsync()
         {
-            var all = await db.GetAsync<WarningPunishment>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
+            var all = await _db.GetAsync<WarningPunishment>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
             var eb = new EmbedBuilder()
                 .WithWarnColor();
             if (all.Any())
@@ -426,7 +437,7 @@ namespace Administrator.Modules.Administration
                 Note = note
             };
 
-            if (await db.InsertAsync(modNote) > 0)
+            if (await _db.InsertAsync(modNote) > 0)
                 eb.WithWarnColor()
                     .WithCurrentTimestamp()
                     .WithTitle($"Note added for user {user}")
@@ -448,11 +459,11 @@ namespace Administrator.Modules.Administration
         private async Task RemoveNoteAsync(long id)
         {
             var eb = new EmbedBuilder();
-            var notes = await db.GetAsync<ModNote>(x => x.Id == id).ConfigureAwait(false);
+            var notes = await _db.GetAsync<ModNote>(x => x.Id == id).ConfigureAwait(false);
 
             if (notes.FirstOrDefault() is ModNote mn)
             {
-                await db.DeleteAsync(mn).ConfigureAwait(false);
+                await _db.DeleteAsync(mn).ConfigureAwait(false);
                 eb.WithWarnColor()
                     .WithDescription($"Mod note with ID **{id}** has been removed.");
             }
@@ -472,7 +483,7 @@ namespace Administrator.Modules.Administration
         private async Task GetNotesAsync(IUser receiver)
         {
             var eb = new EmbedBuilder();
-            var notes = await db.GetAsync<ModNote>(x => x.ReceiverId == (long) receiver.Id).ConfigureAwait(false);
+            var notes = await _db.GetAsync<ModNote>(x => x.ReceiverId == (long) receiver.Id).ConfigureAwait(false);
 
             if (notes.Any())
             {
@@ -502,7 +513,7 @@ namespace Administrator.Modules.Administration
         private async Task GetNotesAsync(int page = 1)
         {
             var eb = new EmbedBuilder();
-            var notes = await db.GetAsync<ModNote>(x => x.IssuerId == (long) Context.User.Id).ConfigureAwait(false);
+            var notes = await _db.GetAsync<ModNote>(x => x.IssuerId == (long) Context.User.Id).ConfigureAwait(false);
 
             if (notes.Any())
             {
@@ -578,7 +589,7 @@ namespace Administrator.Modules.Administration
         private async Task InternalMuteAsync(IUser targetUser, DateTimeOffset ending, string reason)
         {
             var eb = new EmbedBuilder();
-            var guildConfig = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var guildConfig = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
 
             if (!(Context.User is SocketGuildUser issuer) || !(targetUser is SocketGuildUser target)) return;
 
@@ -599,7 +610,7 @@ namespace Administrator.Modules.Administration
                     Reason = reason
                 };
 
-                if (await db.InsertAsync(mute).ConfigureAwait(false) > 0)
+                if (await _db.InsertAsync(mute).ConfigureAwait(false) > 0)
                 {
                     await target.AddRoleAsync(muteRole).ConfigureAwait(false);
                     eb.WithOkColor()
@@ -611,7 +622,7 @@ namespace Administrator.Modules.Administration
                         .WithDescription(
                             "Either that user already has a mute in place, or an internal error occurred.");
 
-                    await db.DeleteAsync(mute).ConfigureAwait(false);
+                    await _db.DeleteAsync(mute).ConfigureAwait(false);
                 }
             }
             else
@@ -631,7 +642,7 @@ namespace Administrator.Modules.Administration
         [Priority(1)]
         private async Task UnmuteAsync(long id)
         {
-            var guildConfig = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var guildConfig = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
 
             if (!(Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) guildConfig.MuteRole) is SocketRole muteRole))
             {
@@ -641,7 +652,7 @@ namespace Administrator.Modules.Administration
             }
 
             var eb = new EmbedBuilder();
-            var mutes = await db.GetAsync<MutedUser>(x => x.GuildId == (long) Context.Guild.Id && x.Id == id).ConfigureAwait(false);
+            var mutes = await _db.GetAsync<MutedUser>(x => x.GuildId == (long) Context.Guild.Id && x.Id == id).ConfigureAwait(false);
 
             if (mutes.FirstOrDefault() is MutedUser mute
                 && Context.Guild.GetUser((ulong) mute.UserId) is SocketGuildUser target)
@@ -649,7 +660,7 @@ namespace Administrator.Modules.Administration
                 await target.RemoveRoleAsync(muteRole).ConfigureAwait(false);
                 eb.WithOkColor()
                     .WithDescription($"User **{target}** has been unmuted.");
-                await db.DeleteAsync(mute).ConfigureAwait(false);
+                await _db.DeleteAsync(mute).ConfigureAwait(false);
             }
             else
             {
@@ -669,7 +680,7 @@ namespace Administrator.Modules.Administration
         private async Task UnmuteAsync(IUser targetUser)
         {
             if (!(targetUser is SocketGuildUser target)) return;
-            var guildConfig = await db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            var guildConfig = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
 
             if (!(Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) guildConfig.MuteRole) is SocketRole muteRole))
             {
@@ -679,14 +690,14 @@ namespace Administrator.Modules.Administration
             }
 
             var eb = new EmbedBuilder();
-            var mutes = await db.GetAsync<MutedUser>(x => x.GuildId == (long) Context.Guild.Id && x.UserId == (long) targetUser.Id).ConfigureAwait(false);
+            var mutes = await _db.GetAsync<MutedUser>(x => x.GuildId == (long) Context.Guild.Id && x.UserId == (long) targetUser.Id).ConfigureAwait(false);
 
             if (mutes.FirstOrDefault() is MutedUser mute)
             {
                 await target.RemoveRoleAsync(muteRole).ConfigureAwait(false);
                 eb.WithOkColor()
                     .WithDescription($"User **{target}** has been unmuted.");
-                await db.DeleteAsync(mute).ConfigureAwait(false);
+                await _db.DeleteAsync(mute).ConfigureAwait(false);
             }
             else
             {
@@ -704,7 +715,7 @@ namespace Administrator.Modules.Administration
         [RequireUserPermission(GuildPermission.MuteMembers)]
         private async Task GetMutesAsync(int page = 1)
         {
-            var mutes = await db.GetAsync<MutedUser>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
+            var mutes = await _db.GetAsync<MutedUser>(x => x.GuildId == (long) Context.Guild.Id).ConfigureAwait(false);
 
             if (!mutes.Any())
             {
@@ -731,6 +742,132 @@ namespace Administrator.Modules.Administration
         #endregion
 
         #region General
+
+        [Command("makepingable", RunMode = RunMode.Async)]
+        [Alias("pingable", "mentionable")]
+        [Summary("Makes a role mentionable for as many seconds as you specify. Defaults to 30. Minimum 5.")]
+        [Usage("{p}pingable 60 Some Role", "{p}pingable Some Role")]
+        [RequireUserPermission(GuildPermission.ManageRoles)]
+        [RequireBotPermission(GuildPermission.ManageRoles)]
+        [Priority(1)]
+        private async Task MakeRolePingableAsync(uint seconds, [Remainder] string roleName)
+        {
+            if (seconds < 5) return;
+            if (!(Context.Guild.Roles.FirstOrDefault(x => x.Name.Equals(roleName, StringComparison.OrdinalIgnoreCase))
+                is SocketRole role))
+            {
+                await Context.Channel.SendErrorAsync("No role found by that name.").ConfigureAwait(false);
+                return;
+            }
+
+            try
+            {
+                await role.ModifyAsync(x => x.Mentionable = true).ConfigureAwait(false);
+                var m = await Context.Channel
+                    .SendConfirmAsync($"Role **{role.Name}** will now be mentionable for the next {seconds} seconds.")
+                    .ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(seconds)).ConfigureAwait(false);
+                await role.ModifyAsync(x => x.Mentionable = false).ConfigureAwait(false);
+                var modified = new EmbedBuilder()
+                    .WithOkColor()
+                    .WithDescription($"Role **{role.Name}** has been made unmentionable.");
+                await m.ModifyAsync(x => x.Embed = modified.Build()).ConfigureAwait(false);
+            }
+            catch
+            {
+                await Context.Channel
+                    .SendErrorAsync(
+                        "I could not make that role mentionable. Check my permissions and verify that I am above this role in the hierarchy.")
+                    .ConfigureAwait(false);
+            }
+        }
+
+        [Command("makepingable", RunMode = RunMode.Async)]
+        [Alias("pingable", "mentionable")]
+        [Summary("Makes a role mentionable for as many seconds as you specify. Defaults to 30. Minimum 5.")]
+        [Usage("{p}pingable 60 Some Role", "{p}pingable Some Role")]
+        [RequireUserPermission(GuildPermission.ManageRoles)]
+        [RequireBotPermission(GuildPermission.ManageRoles)]
+        [Priority(0)]
+        private async Task MakeRolePingableAsync([Remainder] string roleName)
+            => await MakeRolePingableAsync(30, roleName).ConfigureAwait(false);
+        
+        [Command("lockchannel", RunMode = RunMode.Async)]
+        [Alias("lock")]
+        [Summary(
+            "Lock a channel, sealing it off for everyone below your guild's PermRole. A duration may be specified, in seconds.")]
+        [Usage("{p}lock #somechannel", "{p}lock #somechannel 60")]
+        [Remarks("Note: on a permanent lock, this command removes all existing permission overwrites for that channel.")]
+        [RequireUserPermission(GuildPermission.ManageChannels)]
+        [RequireBotPermission(GuildPermission.ManageChannels)]
+        [RequirePermRole]
+        [Priority(1)]
+        private async Task LockChannelAsync(IGuildChannel channel, uint seconds)
+        {
+            if (!(channel is ITextChannel)) return;
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            if (!(Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) gc.PermRole) is SocketRole permRole))
+            {
+                // this shouldn't happen, but let's check anyways
+                await Context.Channel.SendErrorAsync("This guild's permrole is not set.").ConfigureAwait(false);
+                return;
+            }
+        }
+
+        [Command("lockchannel", RunMode = RunMode.Async)]
+        [Alias("lock")]
+        [Summary(
+            "Lock a channel, sealing it off for everyone below your guild's PermRole. A duration may be specified, in seconds.")]
+        [Usage("{p}lock #somechannel", "{p}lock #somechannel 60")]
+        [Remarks("Note: on a permanent lock, this command removes all existing permission overwrites for that channel.")]
+        [RequireUserPermission(GuildPermission.ManageChannels)]
+        [RequireBotPermission(GuildPermission.ManageChannels)]
+        [RequirePermRole]
+        [Priority(0)]
+        private async Task LockChannelAsync(IGuildChannel channel)
+        {
+            if (!(channel is ITextChannel chnl)) return;
+            var gc = await _db.GetOrCreateGuildConfigAsync(Context.Guild).ConfigureAwait(false);
+            if (!(Context.Guild.Roles.FirstOrDefault(x => x.Id == (ulong) gc.PermRole) is SocketRole permRole))
+            {
+                // this shouldn't happen, but let's check anyways
+                await Context.Channel.SendErrorAsync("This guild's permrole is not set.").ConfigureAwait(false);
+                return;
+            }
+            
+            var disable = new OverwritePermissions(sendMessages: PermValue.Deny, addReactions: PermValue.Deny);
+            var enable = new OverwritePermissions(sendMessages: PermValue.Allow, addReactions: PermValue.Allow);
+
+            try
+            {
+                // remove existing perms
+                foreach (var o in chnl.PermissionOverwrites.ToList())
+                {
+                    switch (o.TargetType)
+                    {
+                        case PermissionTarget.Role:
+                            if (Context.Guild.Roles.FirstOrDefault(x => x.Id == o.TargetId) is SocketRole r)
+                                await chnl.RemovePermissionOverwriteAsync(r).ConfigureAwait(false);
+                            break;
+                        case PermissionTarget.User:
+                            if (Context.Guild.GetUser(o.TargetId) is SocketGuildUser u)
+                                await chnl.RemovePermissionOverwriteAsync(u).ConfigureAwait(false);
+                            break;
+                    }
+                }
+
+                await chnl.AddPermissionOverwriteAsync(Context.Guild.EveryoneRole, disable).ConfigureAwait(false);
+                await chnl.AddPermissionOverwriteAsync(permRole, enable).ConfigureAwait(false);
+            }
+            catch
+            {
+                await Context.Channel.SendErrorAsync("An error occurred setting up lock permissions.")
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            await chnl.SendConfirmAsync($"{chnl.Mention} is now locked.").ConfigureAwait(false);
+        }
 
         [Command("say")]
         [Summary("Send a message in a specified channel using the bot. Supports TOML embeds. Channel defaults to the current channel you are in.")]
@@ -801,7 +938,7 @@ namespace Administrator.Modules.Administration
                         await m.ModifyAsync(x =>
                         {
                             x.Content = toModify.Item1;
-                            x.Embed = toModify.Item2 is null ? null : toModify.Item2.Build();
+                            x.Embed = toModify.Item2?.Build();
                         }).ConfigureAwait(false);
                     }
                 }
@@ -816,6 +953,15 @@ namespace Administrator.Modules.Administration
 
             await Context.Message.AddReactionAsync(new Emoji("\U0000274c")).ConfigureAwait(false);
         }
+
+        [Command("edit")]
+        [Summary(
+            "Edit a bot message with a specific channel and message ID. Supports TOML embeds. Channel defaults to the current channel you are in.")]
+        [Usage("{p}edit #somechannel 1234567890 haha memes")]
+        [RequireUserPermission(GuildPermission.ManageMessages)]
+        [Priority(0)]
+        private async Task EditBotMessageAsync(ulong messageId, [Remainder] string newMessage)
+            => await EditBotMessageAsync(Context.Channel as IGuildChannel, messageId, newMessage).ConfigureAwait(false);
 
         [Command("kick")]
         [Alias("k")]

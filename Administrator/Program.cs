@@ -12,6 +12,7 @@ using NLog;
 using System;
 using System.Reflection;
 using System.Threading.Tasks;
+using Administrator.Modules.Administration.Services;
 
 namespace Administrator
 {
@@ -63,6 +64,7 @@ namespace Administrator
                 .AddSingleton(crosstalk)
                 .AddSingleton(stats)
                 .AddSingleton(reaction)
+                .AddSingleton(new ChannelLockService())
                 .BuildServiceProvider();
             handler = new CommandHandler(services);
             scheduler = new SchedulerService(db, client, crosstalk);

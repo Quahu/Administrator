@@ -43,7 +43,7 @@ namespace Administrator.Modules.Utility
         }
 
         #region Looking To Play
-
+        
         [Command("lookingtoplay")]
         [Alias("ltp")]
         [Summary("Toggle \"Looking to Play\" status on yourself. This role is mentionable and lasts as long as many hours you specify (default 2), up to the guild's maximum allowed time." +
@@ -101,27 +101,18 @@ namespace Administrator.Modules.Utility
 
         #region General
 
-        [Command("getadmin")]
-        [Summary("Get a link to invite the bot to your server.")]
-        [Usage("{p}getadmin")]
-        private async Task GetAdminAsync()
-        {
-            try
-            {
-                var dm = await Context.User.GetOrCreateDMChannelAsync().ConfigureAwait(false);
-                await dm.SendMessageAsync(
-                        $"Use this link to invite me to your server! https://discordapp.com/api/oauth2/authorize?client_id={Context.Client.CurrentUser.Id}&permissions=1543892214&scope=bot")
-                    .ConfigureAwait(false);
-            }
-            catch
-            {
-                // ignored
-            }
-        }
+        [Command("ping")]
+        [Summary("Check the bot's API latency.")]
+        [Usage("{p}ping")]
+        [RequirePermissionsPass]
+        private async Task PingAsync()
+            => await Context.Channel.SendConfirmAsync($"🏓 Pong! Current API latency is {Context.Client.Latency}")
+                .ConfigureAwait(false);
 
         [Command("stats")]
         [Summary("Get bot stats, including uptime, guilds, and other information.")]
         [Usage("{p}stats")]
+        [RequirePermissionsPass]
         private async Task GetStatsAsync()
         {
             var app = await Context.Client.GetApplicationInfoAsync().ConfigureAwait(false);
