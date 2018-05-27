@@ -64,7 +64,7 @@ namespace Administrator
                 .AddSingleton(crosstalk)
                 .AddSingleton(stats)
                 .AddSingleton(reaction)
-                .AddSingleton(new ChannelLockService())
+                .AddSingleton(new ChannelLockService(db))
                 .BuildServiceProvider();
             handler = new CommandHandler(services);
             scheduler = new SchedulerService(db, client, crosstalk);

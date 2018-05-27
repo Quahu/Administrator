@@ -10,9 +10,7 @@ namespace Administrator.Extensions
     public static class DiscordExtensions
     {
         public static async Task<IUserMessage> EmbedAsync(this IMessageChannel channel, Embed embed)
-        {
-            return await channel.SendMessageAsync(string.Empty, embed: embed).ConfigureAwait(false);
-        }
+            => await channel.SendMessageAsync(string.Empty, embed: embed).ConfigureAwait(false);
 
         public static async Task EmbedAsync(this IMessageChannel channel, Embed embed, TimeSpan timeout)
         {
