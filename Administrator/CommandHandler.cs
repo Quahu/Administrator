@@ -1,239 +1,194 @@
 ﻿using Administrator.Common;
+using Administrator.Common.Database;
 using Administrator.Extensions;
 using Administrator.Services;
-using Administrator.Services.Database;
-using Administrator.Services.Database.Models;
+using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
+using Microsoft.Extensions.DependencyInjection;
 using NLog;
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Administrator
 {
-    public class CommandHandler
+    public static class CommandHandler
     {
-        private static readonly Config Config = BotConfig.New();
+        private const string INVITE_PATTERN = @"discord(?:\.com|\.gg)[\/invite\/]?(?:(?!.*[Ii10OolL]).[a-zA-Z0-9]{5,6}|[a-zA-Z0-9\-]{2,32})";
         private static readonly Logger Log = LogManager.GetCurrentClassLogger();
-        private readonly DiscordSocketClient _client;
-        private readonly CommandService _commands;
-        private readonly DbService _db;
-        private readonly StatsService _stats;
-        private readonly CrosstalkService _crosstalk;
-        private readonly IServiceProvider _services;
-        private readonly Dictionary<ValueTuple<SocketTextChannel, SocketTextChannel>, DateTimeOffset> _callMessages;
+        private static IServiceProvider _services;
 
-        public CommandHandler(IServiceProvider services)
+        public static void Initialize(IServiceProvider services)
         {
-            _client = services.GetService(typeof(DiscordSocketClient)) as DiscordSocketClient;
-            _commands = services.GetService(typeof(CommandService)) as CommandService;
-            _db = services.GetService(typeof(DbService)) as DbService;
-            _stats = services.GetService(typeof(StatsService)) as StatsService;
-            _crosstalk = services.GetService(typeof(CrosstalkService)) as CrosstalkService;
             _services = services;
-            _callMessages = new Dictionary<(SocketTextChannel, SocketTextChannel), DateTimeOffset>();
-            if (_client != null) _client.MessageReceived += HandleAsync;
+            _services.GetService<CommandService>().CommandExecuted += OnCommandExecuted;
+            _services.GetService<CommandService>().Log += LogErrorAsync;
+            Log.Info("Initialized.");
         }
 
-        private async Task HandleAsync(SocketMessage message)
+        private static async Task LogErrorAsync(LogMessage msg)
         {
-            var watch = Stopwatch.StartNew();
-            _stats.MessagesReceived++;
-            const string pattern =
-                @"discord(?:\.com|\.gg)[\/invite\/]?(?:(?!.*[Ii10OolL]).[a-zA-Z0-9]{5,6}|[a-zA-Z0-9\-]{2,32})";
-
-            if (!(message is SocketUserMessage msg)
-                || msg.Author.IsBot
-                || msg.Author.Equals(_client.CurrentUser)) return;
-
-            var blws = await _db.GetAsync<BlacklistedWord>().ConfigureAwait(false);
-
-            if (msg.MentionedUsers.Count == 0
-                && msg.Channel is SocketGuildChannel c
-                && blws.Any(x => x.GuildId == (long) c.Guild.Id && msg.Content.ToLower().Contains(x.Word.ToLower())))
+            if (msg.Exception is CommandException ex
+                && ex.Command.RunMode == RunMode.Async
+                && ex.Context.Guild is SocketGuild guild)
             {
-                var gc = await _db.GetOrCreateGuildConfigAsync(c.Guild).ConfigureAwait(false);
-                if (msg.Author is SocketGuildUser u && u.Roles.All(x => x.Id != (ulong) gc.PermRole))
+                Log.Error(ex.InnerException, ex.InnerException.ToString);
+                using (var scope = _services.CreateScope())
+                using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
                 {
-                    try
+                    var gc = ctx.GetOrCreateGuildConfig(guild);
+                    if (gc.VerboseErrors == Functionality.Enable)
                     {
-                        await msg.DeleteAsync().ConfigureAwait(false);
+                        await ex.Context.Channel.SendErrorAsync(ex.Message);
                     }
-                    catch
+                }
+            }
+        }
+
+        public static async Task HandleAsync(SocketMessage message)
+        {
+            if (!(message is SocketUserMessage msg)
+                || await TryFilterMessageAsync(msg)
+                || msg.Author.IsBot) return;
+
+            var commands = _services.GetService<CommandService>();
+            var context = new SocketCommandContext(_services.GetService<DiscordSocketClient>(), msg);
+            var argPos = 0;
+            
+            StatsService.IncrementMessagesReceived(context.Guild);
+
+            using (var scope = _services.CreateScope())
+            using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
+            {
+                if (msg.Content.Equals($"{BotConfig.Prefix}prefix", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (context.Channel is IPrivateChannel)
                     {
-                        // ignored
+                        await context.Channel.SendOkAsync($"Default prefix is \"{BotConfig.Prefix}\".");
+                        return;
                     }
+
+                    await context.Channel.SendOkAsync($"Prefix on this guild is \"{ctx.GetPrefixOrDefault(context.Guild)}\".");
                     return;
                 }
-            }
 
-            var argPos = 0;
-            if (!msg.HasStringPrefix(Config.BotPrefix, ref argPos))
-            {
-                _ = Task.Run(async () =>
+                if (!msg.HasStringPrefix(ctx.GetPrefixOrDefault(context.Guild), ref argPos))
                 {
-                    if (!(msg.Channel is SocketGuildChannel channel)) return;
-                    var gc = await _db.GetOrCreateGuildConfigAsync(channel.Guild).ConfigureAwait(false);
+                    return;
+                }
+                
+                var result = await commands.ExecuteAsync(context, argPos, scope.ServiceProvider);
 
-                    // check for invites to filter
-                    try
-                    {
-                        var invites = await channel.Guild.GetInvitesAsync().ConfigureAwait(false);
-                        if (gc.InviteFiltering && Regex.IsMatch(msg.Content, pattern) &&
-                            !invites.Any(i => msg.Content.Contains(i.Code)))
-                        {
-                            await msg.DeleteAsync().ConfigureAwait(false);
-                        }
-                    }
-                    catch
-                    {
-                        // ignored
-                    }
-
-                    // check for active calls
-                    if (!string.IsNullOrWhiteSpace(msg.Content)
-                        && msg.Channel is SocketTextChannel ch &&
-                        _crosstalk.Calls.FirstOrDefault(x => x.Channel1.Id == ch.Id || x.Channel2.Id == ch.Id && x.IsConnected) is
-                            CrosstalkCall call)
-                    {
-                        if (call.Channel1.Id == channel.Id)
-                        {
-                            /*
-                            var chnl2Messages = await (call.Channel2 as IMessageChannel)
-                                .GetMessagesAsync(20, CacheMode.CacheOnly).FlattenAsync().ConfigureAwait(false);
-                            var msgs2 = chnl2Messages.Where(x => x.Content.Equals(
-                                    $"{Emote.Parse("<a:typing:447092767428968458>")} **{msg.Author.Username.SanitizeMentions()}** is typing...")
-                                    && x.Author.Id == _client.CurrentUser.Id)
-                                    .ToList();
-
-                            if (msgs2.Any())
-                            {
-                                foreach (var m in msgs2)
-                                {
-                                    try
-                                    {
-                                        await m.DeleteAsync();
-                                    }
-                                    catch
-                                    {
-                                        // ignored
-                                    }
-                                }
-                            }
-                            */
-                            await call.Channel2
-                                .SendMessageAsync($"**{msg.Author.Username.SanitizeMentions()}**: {msg.Content.SanitizeMentions()}")
-                                .ConfigureAwait(false);
-                            return;
-                        }
-
-                        /*
-                        var chnl1Messages = await (call.Channel1 as IMessageChannel)
-                            .GetMessagesAsync(20, CacheMode.CacheOnly).FlattenAsync().ConfigureAwait(false);
-                        var msgs1 = chnl1Messages.Where(x => x.Content.Equals(
-                                $"{Emote.Parse("<a:typing:447092767428968458>")} **{msg.Author.Username.SanitizeMentions()}** is typing...")
-                                && x.Author.Id == _client.CurrentUser.Id)
-                                .ToList();
-
-                        if (msgs1.Any())
-                        {
-                            foreach (var m in msgs1)
-                            {
-                                try
-                                {
-                                    await m.DeleteAsync();
-                                }
-                                catch
-                                {
-                                    // ignored
-                                }
-                            }
-                        }
-                        */
-
-                        await call.Channel1
-                            .SendMessageAsync($"**{msg.Author.Username.SanitizeMentions()}**: {msg.Content.SanitizeMentions()}")
-                            .ConfigureAwait(false);
-                    }
-
-                    // check and increment phrases
-                    var userPhrases = await _db.GetAsync<UserPhrase>(x => x.GuildId == (long) channel.Guild.Id)
-                        .ConfigureAwait(false);
-                    userPhrases = userPhrases.Where(x => msg.Content.ContainsWord(x.Phrase)).ToList();
-                    var phrases = await _db
-                        .GetAsync<Phrase>(x => userPhrases.Select(y => y.Id).Contains(x.UserPhraseId))
-                        .ConfigureAwait(false);
-
-                    if (userPhrases.Any())
-                    {
-                        var toInsert = new List<Phrase>();
-
-                        foreach (var up in userPhrases)
-                        {
-                            if (phrases.All(x => DateTimeOffset.UtcNow - x.Timestamp >= TimeSpan.FromSeconds(5)))
-                            {
-                                toInsert.Add(new Phrase
-                                {
-                                    GuildId = up.GuildId,
-                                    ChannelId = (long) msg.Channel.Id,
-                                    UserId = (long) msg.Author.Id,
-                                    UserPhraseId = up.Id
-                                });
-                            }
-                        }
-
-                        if (toInsert.Any()) await _db.InsertAllAsync(toInsert).ConfigureAwait(false);
-                    }
-
-                    if (!gc.EnableRespects || msg.Content != "F") return;
-
-                    var respects = await _db.GetAsync<Respects>(x =>
-                            x.GuildId == (long) channel.Guild.Id)
-                        .ConfigureAwait(false);
-                    if (respects.Any(x => x.UserId == (long) msg.Author.Id && x.Timestamp.Day == DateTimeOffset.UtcNow.Day)) return;
-
-                    var r = new Respects
-                    {
-                        GuildId = (long) channel.Guild.Id,
-                        UserId = (long) msg.Author.Id
-                    };
-                    await _db.InsertAsync(r).ConfigureAwait(false);
-                    await msg.Channel
-                        .SendConfirmAsync(
-                            $"**{msg.Author}** has paid their respects today ({respects.Count(x => x.Timestamp.Day == DateTimeOffset.UtcNow.Day) + 1} total today).")
-                        .ConfigureAwait(false);
-                });
-                return;
-            }
-
-            var context = new SocketCommandContext(_client, msg);
-            var result = await _commands.ExecuteAsync(context, argPos, _services).ConfigureAwait(false);
-
-            if (!result.IsSuccess)
-            {
-                if (result.Error != CommandError.UnknownCommand)
+                if (result.IsSuccess || result.Error == CommandError.UnknownCommand) return;
+                switch (result)
                 {
-                    Log.CommandError(watch.ElapsedMilliseconds / 1000.0, context, result);
-                    if (context.Guild is SocketGuild g)
-                    {
-                        var gc = await _db.GetOrCreateGuildConfigAsync(g).ConfigureAwait(false);
-                        if (gc.VerboseErrors)
+                    case AdminResult ar:
+                        Log.Warn($"Command errored after {ar.ExecuteTime.TotalSeconds:F}s\n" +
+                                 $"\t\tGuild: {context.Guild?.Name} [{context.Guild?.Id}]\n" +
+                                 $"\t\tChannel: {context.Channel.Name} [{context.Channel.Id}]\n" +
+                                 $"\t\tUser: {context.User} [{context.User.Id}]\n" +
+                                 $"\t\tMessage: {context.Message.Content.Replace("\n", string.Empty)}\n" +
+                                 $"\t\tReason: {ar.Reason}");
+                        switch (ar.Error)
                         {
-                            await context.Channel.SendErrorAsync(result.ErrorReason).ConfigureAwait(false);
+                            case CommandError.Unsuccessful:
+                                if (!string.IsNullOrWhiteSpace(ar.Message) && ar.Embed is null)
+                                {
+                                    await context.Channel.SendErrorAsync(ar.Message);
+                                }
+                                else if (ar.Embed is Embed e)
+                                {
+                                    await context.Channel.SendMessageAsync(ar.Message ?? string.Empty, embed: e);
+                                }
+                                else goto default;
+                                break;
+                            default:
+                                await TrySendVerboseErrorAsync(context, ctx, ar);
+                                break;
                         }
+                        break;
+                    default:
+                        Log.Warn("Command errored\n" +
+                                 $"\t\tGuild: {context.Guild?.Name} [{context.Guild?.Id}]\n" +
+                                 $"\t\tChannel: {context.Channel.Name} [{context.Channel.Id}]\n" +
+                                 $"\t\tUser: {context.User} [{context.User.Id}]\n" +
+                                 $"\t\tMessage: {context.Message.Content.Replace("\n", string.Empty)}\n" +
+                                 $"\t\tReason: {result.ErrorReason}");
+                        await TrySendVerboseErrorAsync(context, ctx, result);
+                        break;
+                }
+            }
+        }
+
+        public static async Task<bool> TryFilterMessageAsync(SocketMessage msg)
+        {
+            if (!(msg.Author is SocketGuildUser u)) return false;
+
+            using (var scope = _services.CreateScope())
+            using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
+            {
+                var gc = ctx.GetOrCreateGuildConfig(u.Guild);
+
+                // filter blacklisted words
+                if (ctx.MessageFilters?.Any(x => x.GuildId == gc.Id && x.IsMatch(msg.Content)) == true)
+                {
+                    if (u.Roles.All(x => x.Id != gc.PermRoleId))
+                    {
+                        await msg.TryDeleteAsync();
+                    }
+                }
+
+                // filter invites
+                if (u.GuildPermissions.ManageGuild
+                    && gc.FilterInvites == Functionality.Enable
+                    && Regex.IsMatch(msg.Content, INVITE_PATTERN))
+                {
+                    var invites = await u.Guild.GetInvitesAsync();
+
+                    if (invites.All(x => !msg.Content.Contains(x.Code)))
+                    {
+                        await msg.TryDeleteAsync();
                     }
                 }
             }
-            else
+
+            return false;
+        }
+
+        private static async Task OnCommandExecuted(CommandInfo command, ICommandContext context,
+            IResult result)
+        {
+            if (result.IsSuccess && result is AdminResult sr)
             {
-                _stats.CommandsRun++;
-                Log.CommandSuccess(watch.ElapsedMilliseconds / 1000.0, context);
+                Log.ConditionalDebug(result.GetType());
+                Log.Info($"Command [{command.Name}] executed after {sr.ExecuteTime.TotalSeconds:F}s\n" +
+                         $"\t\tGuild: {context.Guild?.Name} [{context.Guild?.Id}]\n" +
+                         $"\t\tChannel: {context.Channel.Name} [{context.Channel.Id}]\n" +
+                         $"\t\tUser: {context.User} [{context.User.Id}]\n" +
+                         $"\t\tMessage: {context.Message.Content.Replace("\n", string.Empty)}");
+
+                if (!string.IsNullOrWhiteSpace(sr.Message) && sr.Embed is null)
+                {
+                    await context.Channel.SendOkAsync(sr.Message);
+                }
+                else if (sr.Embed is Embed e)
+                {
+                    await context.Channel.SendMessageAsync(sr.Message ?? string.Empty, embed: e);
+                }
+
+                StatsService.IncrementCommandsExecuted(context.Guild);
             }
-            watch.Stop();
+        }
+
+        private static async Task<bool> TrySendVerboseErrorAsync(SocketCommandContext context, AdminContext ctx, IResult result)
+        {
+            if (!(context.Guild is SocketGuild guild)) return false;
+            var gc = ctx.GetOrCreateGuildConfig(guild);
+            if (gc.VerboseErrors == Functionality.Disable) return false;
+            await context.Channel.SendErrorAsync(result.ErrorReason);
+            return true;
         }
     }
 }

@@ -1,150 +1,126 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using Discord;
 
 namespace Administrator.Extensions
 {
     public static class StringExtensions
     {
-        public static string ToUpperFirst(this string str)
+        public static bool IsEmoji(this string str)
+            => Regex.IsMatch(str, @"[^\u0000-\u007F]+");
+
+        public static bool IsImageUrl(this string str)
+            => str.EndsWith("png", StringComparison.OrdinalIgnoreCase)
+               || str.EndsWith("jpg", StringComparison.OrdinalIgnoreCase)
+               || str.EndsWith("jpeg", StringComparison.OrdinalIgnoreCase)
+               || str.EndsWith("gif", StringComparison.OrdinalIgnoreCase)
+               || str.EndsWith("bmp", StringComparison.OrdinalIgnoreCase);
+
+        public static IEnumerable<TEnum> GetEnumFlags<TEnum>() where TEnum : Enum
+            => Enum.GetValues(typeof(TEnum)).Cast<TEnum>();
+
+        public static IEnumerable<int> GetUnicodeCodePoints(string emojiString)
         {
-            if (str is null || str.Length == 0) return null;
-            if (str.Length == 1) return str.ToUpper();
-            return str[0].ToString().ToUpper() + str.Substring(1).ToLower();
-        }
-
-        public static bool ContainsWord(this string str, string toCheck)
-        {
-            str = str.ToLower();
-            toCheck = toCheck.ToLower();
-
-            if (str.Equals(toCheck)) return true;
-            if (str.StartsWith(toCheck + " ")) return true;
-            if (str.EndsWith(" " + toCheck)) return true;
-            if (str.Contains(" " + toCheck + " ")) return true;
-
-            return false;
-        }
-
-        public static bool TryExtractUri(this string str, out string updated, out Uri uri)
-        {
-            var strList = new List<string>(str.Split(' '));
-            foreach (var s in strList)
-                if (Uri.TryCreate(s, UriKind.Absolute, out uri)
-                    && (uri.Scheme.Equals(Uri.UriSchemeHttp) || uri.Scheme.Equals(Uri.UriSchemeHttps)))
-                {
-                    strList.Remove(s);
-                    updated = string.Join(' ', strList);
-                    return true;
-                }
-
-            updated = str;
-            uri = null;
-            return false;
-        }
-
-        public static string SanitizeMentions(this string str)
-        {
-            return str.Replace("@everyone", "@everyοne").Replace("@here", "@һere");
-        }
-
-        // The behemoth.
-        public static List<string> GetBestMatchesFor(IEnumerable<string> toCompare, string query, int numResults)
-        {
-            var comparisonScores = new SortedDictionary<string, int>();
-
-            foreach (var s in toCompare.Distinct())
+            var codePoints = new List<int>(emojiString.Length);
+            for (var i = 0; i < emojiString.Length; i++)
             {
-                var score = query.Length;
-
-                if (s.ToLower().Contains(query.ToLower()))
-                    score -= 2 * query.Length;
-
-                foreach (var t in query.Split(' '))
-                    if (s.ToLower().Contains(t.ToLower()))
-                        score -= t.Length;
-
-                score += ComputeLevenshteinDistance(query, s);
-
-                comparisonScores.Add(s, score);
+                var codePoint = char.ConvertToUtf32(emojiString, i);
+                if (codePoint != 0xfe0f)
+                    codePoints.Add(codePoint);
+                if (char.IsHighSurrogate(emojiString[i]))
+                    i++;
             }
 
-            var sorted = comparisonScores.OrderBy(c => c.Value);
-            return sorted.ToDictionary(x => x.Key, x => x.Value).Keys.Take(numResults).ToList();
+            return codePoints;
         }
 
-        private static int ComputeLevenshteinDistance(string s, string t)
+        public static string FormatPlaceHolders(this string str, IUser user = null, IGuild guild = null,
+            ITextChannel channel = null)
         {
-            var n = s.Length;
-            var m = t.Length;
-            var d = new int[n + 1, m + 1];
-
-            // Step 1
-            if (n == 0) return m;
-
-            if (m == 0) return n;
-
-            // Step 2
-            for (var i = 0; i <= n; d[i, 0] = i++)
+            if (user is IUser u)
             {
+                str = str.Replace("{user}", u.ToString())
+                    .Replace("{user.mention}", u.Mention)
+                    .Replace("{user.id}", u.Id.ToString())
+                    .Replace("{user.name}", u.Username)
+                    .Replace("{user.discrim}", u.Discriminator);
             }
 
-            for (var j = 0; j <= m; d[0, j] = j++)
+            if (guild is IGuild g)
             {
+                str = str.Replace("{guild}", g.ToString())
+                    .Replace("{guild.name}", g.Name)
+                    .Replace("{guild.id}", g.Id.ToString());
             }
 
-            // Step 3
-            for (var i = 1; i <= n; i++)
-                //Step 4
-            for (var j = 1; j <= m; j++)
+            if (channel is ITextChannel c)
             {
-                // Step 5
-                var cost = t[j - 1] == s[i - 1] ? 0 : 1;
-
-                // Step 6
-                d[i, j] = Math.Min(
-                    Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1),
-                    d[i - 1, j - 1] + cost);
+                str = str.Replace("{channel}", c.ToString())
+                    .Replace("{channel.mention}", c.Mention)
+                    .Replace("{channel.name}", c.Name)
+                    .Replace("{channel.id}", c.Id.ToString())
+                    .Replace("{channel.topic}", c.Topic);
             }
 
-            // Step 7
-            return d[n, m];
+            return str;
         }
 
-        public static bool EndsWith(this string str, params string[] check)
+        public static string CreateOrdinal(int num)
         {
-            var temp = false;
-            foreach (var c in check)
-                if (str.EndsWith(c))
-                    temp = true;
-            return temp;
-        }
+            if( num <= 0 ) return num.ToString();
 
-        /*
-        private static string Sanitize(string input)
-        {
-            StringBuilder sb = new StringBuilder();
-            input = input.ToLower();
-
-            // if the char is 0-9 or a-z, include it
-            foreach (char c in input)
+            switch(num % 100)
             {
-                if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z'))
-                    sb.Append(c);
+                case 11:
+                case 12:
+                case 13:
+                    return num + "th";
             }
 
-            return sb.ToString();
+            switch(num % 10)
+            {
+                case 1:
+                    return num + "st";
+                case 2:
+                    return num + "nd";
+                case 3:
+                    return num + "rd";
+                default:
+                    return num + "th";
+            }
         }
 
-        public static bool StartsWith(this string s, char[] letters)
+        public static string FormatTimeSpan(TimeSpan ts)
         {
-            foreach (char l in letters)
+            var s = string.Empty;
+            if (ts.Days / 7D > 1)
             {
-                if (s.StartsWith(l))
-                    return true;
+                s += $"{ts.Days / 7} weeks, {ts.Days % 7} days, ";
             }
-            return false;
+            else if (ts.Days > 0)
+            {
+                s += $"{ts.Days} days, ";
+            }
+
+            if (ts.Hours > 0)
+            {
+                s += $"{ts.Hours} hours, ";
+            }
+
+            if (ts.Minutes > 0)
+            {
+                s += $"{ts.Minutes} minutes, ";
+            }
+
+            if (ts.Seconds > 0)
+            {
+                s += $"{ts.Seconds} seconds";
+            }
+
+            return s.TrimEnd(' ', ',');
         }
-        */
     }
 }

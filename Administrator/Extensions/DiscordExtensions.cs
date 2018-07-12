@@ -1,163 +1,177 @@
-﻿using Administrator.Common;
-using Discord;
-using Discord.WebSocket;
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Administrator.Common;
+using Discord;
+using Discord.Commands;
+using Discord.WebSocket;
 
 namespace Administrator.Extensions
 {
     public static class DiscordExtensions
     {
-        public static async Task<IUserMessage> EmbedAsync(this IMessageChannel channel, Embed embed)
-            => await channel.SendMessageAsync(string.Empty, embed: embed).ConfigureAwait(false);
-
-        public static async Task EmbedAsync(this IMessageChannel channel, Embed embed, TimeSpan timeout)
+        public static async Task<bool> TryDeleteAsync(this IDeletable toDelete)
         {
-            var msg = await channel.SendMessageAsync(string.Empty, embed: embed).ConfigureAwait(false);
-            await Task.Delay(timeout).ConfigureAwait(false);
             try
             {
-                await msg.DeleteAsync().ConfigureAwait(false);
+                await toDelete.DeleteAsync();
+                return true;
             }
             catch
             {
-                // ignored
+                return false;
             }
         }
 
-        public static async Task SendConfirmAsync(this IMessageChannel channel, string message, TimeSpan? deleteAfter = null)
+        public static async Task<IUserMessage> SendMessageAsync(this IMessageChannel channel, string message,
+            TimeSpan? timeout = null)
         {
-            var msg = await channel.EmbedAsync(new EmbedBuilder().WithOkColor().WithDescription(message).Build())
-                .ConfigureAwait(false);
+            var m = await channel.SendMessageAsync(message);
 
-            if (deleteAfter is TimeSpan ts)
+            if (timeout is TimeSpan ts)
             {
-                try
+                _ = Task.Run(async () => await Task.Delay(ts).ContinueWith(_ => m.DeleteAsync()));
+            }
+
+            return m;
+        }
+
+        public static async Task<IUserMessage> EmbedAsync(this IMessageChannel channel, Embed embed,
+            TimeSpan? timeout = null)
+        {
+            var m = await channel.SendMessageAsync(string.Empty, embed: embed);
+
+            if (timeout is TimeSpan ts)
+            {
+                _ = Task.Run(async () => await Task.Delay(ts).ContinueWith(_ => m.DeleteAsync()));
+            }
+
+            return m;
+        }
+
+        public static async Task<IUserMessage> EmbedAsync(this IMessageChannel channel, TomlEmbed embed,
+            TimeSpan? timeout = null)
+        {
+            var plaintext = string.IsNullOrWhiteSpace(embed.Plaintext) ? string.Empty : embed.Plaintext;
+            var eb = new EmbedBuilder();
+
+            if (!string.IsNullOrWhiteSpace(embed.Title))
+                eb.WithTitle(embed.Title);
+
+            if (!string.IsNullOrWhiteSpace(embed.Description))
+                eb.WithDescription(embed.Description);
+
+            if (!string.IsNullOrWhiteSpace(embed.Color))
+                eb.WithColor(Convert.ToUInt32(embed.Color, 16));
+
+            if (!string.IsNullOrWhiteSpace(embed.ThumbnailUrl))
+                eb.WithThumbnailUrl(embed.ThumbnailUrl);
+
+            if (!string.IsNullOrWhiteSpace(embed.ImageUrl))
+                eb.WithImageUrl(embed.ImageUrl);
+
+            if (embed.Author is Author au)
+                eb.WithAuthor(au.Name, au.IconUrl);
+
+            if (embed.Footer is Footer f)
+                eb.WithFooter(f.Text, f.IconUrl);
+
+            if (embed.Fields?.Any() == true)
+            {
+                foreach (var field in embed.Fields)
                 {
-                    await Task.Delay(ts).ConfigureAwait(false);
-                    await msg.DeleteAsync().ConfigureAwait(false);
+                    eb.AddField(field.Name, field.Value, field.Inline);
                 }
-                catch
-                {
-                    // ignored
-                }
+            } 
+
+            var m = await channel.SendMessageAsync(plaintext, embed: eb.Build());
+
+            if (timeout is TimeSpan ts)
+            {
+                _ = Task.Run(async () => await Task.Delay(ts).ContinueWith(_ => m.DeleteAsync()));
             }
+
+            return m;
         }
 
-        public static async Task<IUserMessage> SendErrorAsync(this IMessageChannel channel, string error)
-            => await channel.EmbedAsync(new EmbedBuilder().WithErrorColor().WithDescription(error).Build())
-            .ConfigureAwait(false);
-
-        public static async Task<IUserMessage> SendConfirmAsync(this IMessageChannel channel, string message)
-            => await channel.EmbedAsync(new EmbedBuilder().WithOkColor().WithDescription(message).Build())
-                .ConfigureAwait(false);
-
-        public static async Task SendErrorAsync(this IMessageChannel channel, string error, TimeSpan? deleteAfter = null)
+        public static async Task<IUserMessage> SendOkAsync(this IMessageChannel channel, string message, TimeSpan? timeout = null)
         {
-            var msg = await channel.EmbedAsync(new EmbedBuilder().WithErrorColor().WithDescription(error).Build())
-                .ConfigureAwait(false);
+            var m = await channel.SendMessageAsync(string.Empty,
+                embed: new EmbedBuilder()
+                    .WithOkColor()
+                    .WithDescription(message)
+                    .Build());
 
-            if (deleteAfter is TimeSpan ts)
+            if (timeout is TimeSpan ts)
             {
-                try
-                {
-                    await Task.Delay(ts).ConfigureAwait(false);
-                    await msg.DeleteAsync().ConfigureAwait(false);
-                }
-                catch
-                {
-                    // ignored
-                }
+                _ = Task.Run(async () => await Task.Delay(ts).ContinueWith(_ => m.DeleteAsync()));
             }
+
+            return m;
         }
 
-        public static bool TryParseTextChannel(this SocketGuild guild, string input, out SocketTextChannel channel)
+        public static async Task<IUserMessage> SendErrorAsync(this IMessageChannel channel, string message, TimeSpan? timeout = null)
         {
-            channel = null;
+            var m = await channel.SendMessageAsync(string.Empty,
+                embed: new EmbedBuilder()
+                    .WithErrorColor()
+                    .WithDescription(message)
+                    .Build());
 
-            if (ulong.TryParse(input.TrimStart('<', '#').TrimEnd('>'), out var result)
-                && guild.TextChannels.FirstOrDefault(x => x.Id == result) is SocketTextChannel c)
+            if (timeout is TimeSpan ts)
             {
-                channel = c;
+                _ = Task.Run(async () => await Task.Delay(ts).ContinueWith(_ => m.DeleteAsync()));
             }
 
-            if (guild.TextChannels.FirstOrDefault(
-                x => x.Name.Equals(input, StringComparison.InvariantCultureIgnoreCase)) is SocketTextChannel c2)
-            {
-                channel = c2;
-            }
-
-            return !(channel is null);
+            return m;
         }
 
-        public static async Task SendMessageAsync(this IMessageChannel channel, string text, TimeSpan timeout,
-            bool isTTS = false, Embed embed = null, RequestOptions options = null)
+        public static async Task<IUserMessage> SendWarnAsync(this IMessageChannel channel, string message, TimeSpan? timeout = null)
         {
-            var msg = await channel.SendMessageAsync(text, isTTS, embed, options).ConfigureAwait(false);
-            await Task.Delay(timeout).ConfigureAwait(false);
-            try
+            var m = await channel.SendMessageAsync(string.Empty,
+                embed: new EmbedBuilder()
+                    .WithWarnColor()
+                    .WithDescription(message)
+                    .Build());
+
+            if (timeout is TimeSpan ts)
             {
-                await msg.DeleteAsync().ConfigureAwait(false);
+                _ = Task.Run(async () => await Task.Delay(ts).ContinueWith(_ => m.DeleteAsync()));
             }
-            catch
-            {
-                // ignored
-            }
+
+            return m;
         }
 
-        public static IEmote GetEmote(string emoteStr)
-            => Emote.TryParse(emoteStr, out var result) ? result as IEmote : new Emoji(emoteStr);
-
-        public static bool TryGetChannelId(this SocketGuild guild, string input, out ulong channelId)
+        public static async Task<IUserMessage> SendWinAsync(this IMessageChannel channel, string message, TimeSpan? timeout = null)
         {
-            if (ulong.TryParse(input.TrimStart('<', '#').TrimEnd('>'), out var result) &&
-                guild.Channels.Any(x => x.Id == result))
+            var m = await channel.SendMessageAsync(string.Empty,
+                embed: new EmbedBuilder()
+                    .WithWinColor()
+                    .WithDescription(message)
+                    .Build());
+
+            if (timeout is TimeSpan ts)
             {
-                channelId = result;
-                return true;
+                _ = Task.Run(async () => await Task.Delay(ts).ContinueWith(_ => m.DeleteAsync()));
             }
 
-            if (guild.Channels.Any(x => x.Name.Equals(input.ToLower())))
-            {
-                channelId = guild.Channels.First(x => x.Name.Equals(input.ToLower())).Id;
-                return true;
-            }
-
-            channelId = 0;
-            return false;
+            return m;
         }
 
-        /*
-        public static string AvatarUrl(this IUser usr)
+        public static async Task<IUserMessage> SendLoseAsync(this IMessageChannel channel, string message, TimeSpan? timeout = null)
         {
-            return string.IsNullOrWhiteSpace(usr.AvatarId)
-                ? string.Empty
-                : usr.AvatarId.StartsWith("a_")
-                    ? $"{DiscordConfig.CDNUrl}avatars/{usr.Id}/{usr.AvatarId}.gif"
-                    : $"{DiscordConfig.CDNUrl}avatars/{usr.Id}/{usr.AvatarId}.png";
+            var m = await channel.SendMessageAsync(string.Empty,
+                embed: new EmbedBuilder()
+                    .WithLoseColor()
+                    .WithDescription(message)
+                    .Build());
+
+            if (timeout is TimeSpan ts)
+            {
+                _ = Task.Run(async () => await Task.Delay(ts).ContinueWith(_ => m.DeleteAsync()));
+            }
+
+            return m;
         }
-        */
-    }
-
-
-    public static class EmbedExtensions
-    {
-        private static readonly Config Config = BotConfig.New();
-
-        public static EmbedBuilder WithOkColor(this EmbedBuilder eb)
-            => eb.WithColor(Convert.ToUInt32(Config.Colors.Ok, 16));
-
-        public static EmbedBuilder WithErrorColor(this EmbedBuilder eb)
-            => eb.WithColor(Convert.ToUInt32(Config.Colors.Error, 16));
-
-        public static EmbedBuilder WithWarnColor(this EmbedBuilder eb)
-            => eb.WithColor(Convert.ToUInt32(Config.Colors.Warn, 16));
-
-        public static EmbedBuilder WithWinColor(this EmbedBuilder eb)
-            => eb.WithColor(Convert.ToUInt32(Config.Colors.Win, 16));
-
-        public static EmbedBuilder WithLoseColor(this EmbedBuilder eb)
-            => eb.WithColor(Convert.ToUInt32(Config.Colors.Lose, 16));
     }
 }

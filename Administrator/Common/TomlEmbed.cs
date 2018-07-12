@@ -1,92 +1,13 @@
-﻿using Discord;
-using Nett;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
-using System.Threading.Tasks;
+using System.Text;
+using Discord;
+using Nett;
 
 namespace Administrator.Common
 {
-    public static class TomlEmbedBuilder
-    {
-        public static TomlEmbed ReadToml(string toml)
-            => Toml.ReadString<TomlEmbed>(toml);
-
-        public static async Task<IUserMessage> EmbedAsync(this IMessageChannel channel, TomlEmbed embed, TimeSpan? timeout = null)
-        {
-            var plaintext = string.IsNullOrWhiteSpace(embed.Plaintext) ? string.Empty : embed.Plaintext;
-            var eb = new EmbedBuilder();
-
-            if (!string.IsNullOrWhiteSpace(embed.Title))
-                eb.WithTitle(embed.Title);
-
-            if (!string.IsNullOrWhiteSpace(embed.Description))
-                eb.WithDescription(embed.Description);
-
-            if (!string.IsNullOrWhiteSpace(embed.Color))
-                eb.WithColor(Convert.ToUInt32(embed.Color, 16));
-
-            if (!string.IsNullOrWhiteSpace(embed.ThumbnailUrl))
-                eb.WithThumbnailUrl(embed.ThumbnailUrl);
-
-            if (!string.IsNullOrWhiteSpace(embed.ImageUrl))
-                eb.WithImageUrl(embed.ImageUrl);
-
-            if (embed.Author is Author au)
-                eb.WithAuthor(au.Name, au.IconUrl);
-
-            if (embed.Footer is Footer f)
-                eb.WithFooter(f.Text, f.IconUrl);
-
-            if (embed.Fields is null || !embed.Fields.Any()) 
-                return await channel.SendMessageAsync(plaintext, embed: eb.Build()).ConfigureAwait(false);
-
-            foreach (var field in embed.Fields)
-            {
-                eb.AddField(field.Name, field.Value, field.Inline);
-            }
-
-            return await channel.SendMessageAsync(plaintext, embed: eb.Build()).ConfigureAwait(false);
-        }
-
-        public static (string, EmbedBuilder) ToMessage(this TomlEmbed embed)
-        {
-            var plaintext = string.IsNullOrWhiteSpace(embed.Plaintext) ? string.Empty : embed.Plaintext;
-            var eb = new EmbedBuilder();
-
-            if (!string.IsNullOrWhiteSpace(embed.Title))
-                eb.WithTitle(embed.Title);
-
-            if (!string.IsNullOrWhiteSpace(embed.Description))
-                eb.WithDescription(embed.Description);
-
-            if (!string.IsNullOrWhiteSpace(embed.Color))
-                eb.WithColor(Convert.ToUInt32(embed.Color, 16));
-
-            if (!string.IsNullOrWhiteSpace(embed.ThumbnailUrl))
-                eb.WithThumbnailUrl(embed.ThumbnailUrl);
-
-            if (!string.IsNullOrWhiteSpace(embed.ImageUrl))
-                eb.WithImageUrl(embed.ImageUrl);
-
-            if (embed.Author is Author au)
-                eb.WithAuthor(au.Name, au.IconUrl);
-
-            if (embed.Footer is Footer f)
-                eb.WithFooter(f.Text, f.IconUrl);
-
-            if (embed.Fields is null || !embed.Fields.Any()) 
-                return (plaintext, eb);
-
-            foreach (var field in embed.Fields.ToList())
-            {
-                eb.AddField(field.Name, field.Value, field.Inline);
-            }
-
-            return (plaintext, eb);
-        }
-    }
-
     public class TomlEmbed
     {
         public string Plaintext { get; private set; }
@@ -106,6 +27,69 @@ namespace Administrator.Common
         public Footer Footer { get; private set; }
 
         public Author Author { get; private set; }
+
+        public Embed ToEmbed(IUser user = null, IGuild guild = null)
+        {
+            var eb = new EmbedBuilder();
+            if (!string.IsNullOrWhiteSpace(Title))
+            {
+                eb.WithTitle(Title);
+            }
+
+            if (!string.IsNullOrWhiteSpace(Description))
+            {
+                eb.WithDescription(Description);
+            }
+
+            if (!string.IsNullOrWhiteSpace(Color)
+                && uint.TryParse(Color, NumberStyles.HexNumber, null, out var result))
+            {
+                eb.WithColor(result);
+            }
+
+            if (!string.IsNullOrWhiteSpace(ThumbnailUrl)
+                && Uri.IsWellFormedUriString(ThumbnailUrl, UriKind.Absolute))
+            {
+                eb.WithThumbnailUrl(ThumbnailUrl);
+            }
+
+            if (!string.IsNullOrWhiteSpace(ImageUrl)
+                && Uri.IsWellFormedUriString(ImageUrl, UriKind.Absolute))
+            {
+                eb.WithImageUrl(ImageUrl);
+            }
+
+            if (Fields?.Any() == true)
+            {
+                Fields.ForEach(x => eb.AddField(x.Name, x.Value, x.Inline));
+            }
+
+            if (Footer is Footer f)
+            {
+                eb.WithFooter(f.Text, f.IconUrl);
+            }
+
+            if (Author is Author a)
+            {
+                eb.WithAuthor(a.Name, a.IconUrl);
+            }
+
+            return eb.Build();
+        }
+
+        public static bool TryParse(string input, out TomlEmbed result)
+        {
+            try
+            {
+                result = Toml.ReadString<TomlEmbed>(input);
+                return true;
+            }
+            catch
+            {
+                result = null;
+                return false;
+            }
+        }
     }
 
     public class Footer
