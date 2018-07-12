@@ -1,0 +1,32 @@
+# Bot token - get it from your bot's application page
+Token = "BOT_TOKEN"
+
+# Default bot prefix
+Prefix = "!!"
+
+# Comma-separated bot owner ID(s)
+OwnerIds = [ 0 ]
+
+# Imgur Client ID
+ImgurId = "IMGUR_CLIENT_ID"
+
+# Imgur Client Secret
+ImgurSecret = "IMGUR_CLIENT_SECRET"
+
+# Database type
+#
+# SQLite
+# PostgreSQL
+DatabaseType = "SQLite"
+
+# Database connection string
+# (Search for EF connection strings to see how to set it)
+# Default will place the database in a locally pathed folder "Data".
+ConnectionString = 'Data Source=./Data/Administrator.db'
+
+# Colors
+OkColor = "8650AC"
+WarnColor = "FFD700"
+ErrorColor = "EB4B4B"
+WinColor = "38F3AB"
+LoseColor = "CF6A32"
