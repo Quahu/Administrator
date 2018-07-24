@@ -59,15 +59,12 @@ namespace Administrator.Common.Database
             modelBuilder.Entity<Mute>()
                 .HasBaseType<Infraction>();
 
-            modelBuilder.Entity<Permission>()
-                .HasKey(x => x.Id);
-            modelBuilder.Entity<Permission>()
-                .Property(x => x.Id)
-                .ValueGeneratedOnAdd();
+            modelBuilder.Entity<Warning>()
+                .HasBaseType<Infraction>();
 
-            modelBuilder.Entity<Warning>()
+            modelBuilder.Entity<Permission>()
                 .HasKey(x => x.Id);
-            modelBuilder.Entity<Warning>()
+            modelBuilder.Entity<Permission>()
                 .Property(x => x.Id)
                 .ValueGeneratedOnAdd();
 

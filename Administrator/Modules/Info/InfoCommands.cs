@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -64,11 +65,46 @@ namespace Administrator.Modules.Info
                 .Build());
         }
 
-        [Command("ping")]
+        [Command("ping", RunMode = RunMode.Async)]
         [Summary("Checks the bot's Discord API latency.")]
         [Usage("ping")]
-        private Task<RuntimeResult> PingAsync()
-            => CommandSuccess($"🏓 Pong! Gateway API latency is currently {Context.Client.Latency}ms.");
+        private async Task<RuntimeResult> PingAsync()
+        {
+            IUserMessage message;
+            Stopwatch stopwatch;
+            var heartbeat = Context.Client.Latency;
+
+            var tcs = new TaskCompletionSource<long>();
+            var timeout = Task.Delay(TimeSpan.FromSeconds(30));
+
+            Task TestMessageAsync(SocketMessage arg)
+            {
+                if (arg.Id != message?.Id) return Task.CompletedTask;
+                tcs.SetResult(stopwatch.ElapsedMilliseconds);
+                return Task.CompletedTask;
+            }
+
+            stopwatch = Stopwatch.StartNew();
+            message = await SendOkAsync($"🏓 heartbeat: {heartbeat}ms: init: ---, rtt: ---");
+            var init = stopwatch.ElapsedMilliseconds;
+
+            Context.Client.MessageReceived += TestMessageAsync;
+            var task = await Task.WhenAny(tcs.Task, timeout);
+            Context.Client.MessageReceived -= TestMessageAsync;
+            stopwatch.Stop();
+
+            if (task == timeout)
+            {
+                await message.ModifyAsync(x => x.Embed = new EmbedBuilder().WithOkColor().WithDescription($"🏓 heartbeat: {heartbeat}ms, init: {init}ms, rtt: timed out").Build());
+            }
+            else
+            {
+                var rtt = await tcs.Task;
+                await message.ModifyAsync(x => x.Embed = new EmbedBuilder().WithOkColor().WithDescription($"🏓 heartbeat: {heartbeat}ms, init: {init}ms, rtt: {rtt}ms").Build());
+            }
+
+            return await CommandSuccess();
+        }
 
         [Command("help")]
         [Alias("h")]

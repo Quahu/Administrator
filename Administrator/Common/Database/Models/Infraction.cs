@@ -10,9 +10,9 @@ namespace Administrator.Common.Database.Models
     {
         public uint Id { get; set; }
 
-        public ulong ReceieverId { get; set; }
+        public ulong ReceiverId { get; set; }
 
-        public string ReceieverName { get; set; }
+        public string ReceiverName { get; set; }
 
         public ulong IssuerId { get; set; }
 

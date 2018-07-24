@@ -72,8 +72,8 @@ namespace Administrator.Migrations
                 {
                     Id = table.Column<uint>(nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
-                    ReceieverId = table.Column<ulong>(nullable: false),
-                    ReceieverName = table.Column<string>(nullable: true),
+                    ReceiverId = table.Column<ulong>(nullable: false),
+                    ReceiverName = table.Column<string>(nullable: true),
                     IssuerId = table.Column<ulong>(nullable: false),
                     IssuerName = table.Column<string>(nullable: true),
                     Reason = table.Column<string>(nullable: true),
@@ -141,23 +141,6 @@ namespace Administrator.Migrations
                 {
                     table.PrimaryKey("PK_WarningPunishments", x => x.Id);
                 });
-
-            migrationBuilder.CreateTable(
-                name: "Warnings",
-                columns: table => new
-                {
-                    Id = table.Column<uint>(nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    GuildId = table.Column<ulong>(nullable: false),
-                    ReceiverId = table.Column<ulong>(nullable: false),
-                    IssuerId = table.Column<ulong>(nullable: false),
-                    Reason = table.Column<string>(nullable: true),
-                    Timestamp = table.Column<DateTimeOffset>(nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Warnings", x => x.Id);
-                });
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
@@ -179,9 +162,6 @@ namespace Administrator.Migrations
 
             migrationBuilder.DropTable(
                 name: "WarningPunishments");
-
-            migrationBuilder.DropTable(
-                name: "Warnings");
         }
     }
 }

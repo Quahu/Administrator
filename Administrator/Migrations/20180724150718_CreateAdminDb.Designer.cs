@@ -9,14 +9,14 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Administrator.Migrations
 {
     [DbContext(typeof(AdminContext))]
-    [Migration("20180707084917_CreateAdminDb")]
+    [Migration("20180724150718_CreateAdminDb")]
     partial class CreateAdminDb
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "2.1.0-rtm-30799");
+                .HasAnnotation("ProductVersion", "2.1.1-rtm-30846");
 
             modelBuilder.Entity("Administrator.Common.Database.Models.DiscordUser", b =>
                 {
@@ -132,9 +132,9 @@ namespace Administrator.Migrations
 
                     b.Property<string>("Reason");
 
-                    b.Property<ulong>("ReceieverId");
+                    b.Property<ulong>("ReceiverId");
 
-                    b.Property<string>("ReceieverName");
+                    b.Property<string>("ReceiverName");
 
                     b.Property<DateTimeOffset>("RevocationTimestamp");
 
@@ -189,26 +189,6 @@ namespace Administrator.Migrations
                     b.ToTable("Permissions");
                 });
 
-            modelBuilder.Entity("Administrator.Common.Database.Models.Warning", b =>
-                {
-                    b.Property<uint>("Id")
-                        .ValueGeneratedOnAdd();
-
-                    b.Property<ulong>("GuildId");
-
-                    b.Property<ulong>("IssuerId");
-
-                    b.Property<string>("Reason");
-
-                    b.Property<ulong>("ReceiverId");
-
-                    b.Property<DateTimeOffset>("Timestamp");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Warnings");
-                });
-
             modelBuilder.Entity("Administrator.Common.Database.Models.WarningPunishment", b =>
                 {
                     b.Property<uint>("Id")
@@ -246,6 +226,16 @@ namespace Administrator.Migrations
                     b.ToTable("Mute");
 
                     b.HasDiscriminator().HasValue("Mute");
+                });
+
+            modelBuilder.Entity("Administrator.Common.Database.Models.Warning", b =>
+                {
+                    b.HasBaseType("Administrator.Common.Database.Models.Infraction");
+
+
+                    b.ToTable("Warning");
+
+                    b.HasDiscriminator().HasValue("Warning");
                 });
 #pragma warning restore 612, 618
         }

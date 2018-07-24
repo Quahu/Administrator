@@ -10,9 +10,9 @@ using FluentScheduler;
 using Microsoft.Extensions.DependencyInjection;
 using NLog;
 
-namespace Administrator.Services.Scheduler
+namespace Administrator.Services
 {
-    public static class Scheduler
+    public static class SchedulerService
     {
         private static readonly Logger Log = LogManager.GetCurrentClassLogger();
         private static Registry _registry;
@@ -38,7 +38,7 @@ namespace Administrator.Services.Scheduler
                 foreach (var mute in mutes)
                 {
                     if (!(client.GetGuild(mute.GuildId) is SocketGuild guild)
-                        || !((guild.GetUser(mute.ReceieverId) ?? client.GetUser(mute.ReceieverId)) is SocketUser receiver))
+                        || !((guild.GetUser(mute.ReceiverId) ?? client.GetUser(mute.ReceiverId)) is SocketUser receiver))
                     {
                         ctx.Remove(mute);
                         continue;
@@ -84,7 +84,7 @@ namespace Administrator.Services.Scheduler
                     }
 
                     if (guild.GetRole(gc.MuteRoleId) is SocketRole muteRole
-                        && guild.GetUser(mute.ReceieverId) is SocketGuildUser user)
+                        && guild.GetUser(mute.ReceiverId) is SocketGuildUser user)
                     {
                         await user.RemoveRoleAsync(muteRole);
                     }

@@ -25,79 +25,78 @@ namespace Administrator.Modules.Moderation
         [RequireContext(ContextType.DM)]
         private async Task<RuntimeResult> AppealAsync(uint id, [Remainder] string message)
         {
-            if (DbContext.Infractions.FirstOrDefault(x => x.ReceieverId == Context.User.Id && x.Id == id) is Infraction
-                infraction)
+            if (!(DbContext.Infractions.FirstOrDefault(x => x.ReceiverId == Context.User.Id && x.Id == id) is Infraction
+                infraction))
+                return await CommandError("No case found by that ID.", "No appeal-able case was found by that ID.");
+
+            var gc = DbContext.GetOrCreateGuildConfig(Context.Client.GetGuild(infraction.GuildId));
+            switch (infraction)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Client.GetGuild(infraction.GuildId));
-                switch (infraction)
-                {
-                    case Ban ban:
-                        if (ban.HasBeenAppealed)
-                        {
-                            return await CommandError("Ban has already been appealed.",
-                                "You have already appealed your ban.");
-                        }
+                case Ban ban:
+                    if (ban.HasBeenAppealed)
+                    {
+                        return await CommandError("Ban has already been appealed.",
+                            "You have already appealed your ban.");
+                    }
 
-                        if (string.IsNullOrWhiteSpace(message))
-                        {
-                            return await CommandError("No message specified.",
-                                "You must provide a message in your appeal.");
-                        }
+                    if (string.IsNullOrWhiteSpace(message))
+                    {
+                        return await CommandError("No message specified.",
+                            "You must provide a message in your appeal.");
+                    }
 
 
-                        ban.AppealMessage = message;
-                        ban.AppealedTimestamp = DateTimeOffset.UtcNow;
-                        DbContext.Update(ban);
-                        DbContext.SaveChanges();
+                    ban.AppealMessage = message;
+                    ban.AppealedTimestamp = DateTimeOffset.UtcNow;
+                    DbContext.Update(ban);
+                    DbContext.SaveChanges();
 
-                        if (Context.Client.GetGuild(ban.GuildId)?
-                                .GetTextChannel(gc.LogAppealChannelId) is SocketTextChannel c)
-                        {
-                            await c.EmbedAsync(new EmbedBuilder()
-                                .WithOkColor()
-                                .WithTitle($"Ban - Case #{ban.Id}")
-                                .WithDescription($"**{ban.ReceieverName}** (`{ban.ReceieverId}`) has appealed their ban.\n```\n{ban.AppealMessage}\n```")
-                                .WithFooter($"Use `{DbContext.GetPrefixOrDefault(Context.Client.GetGuild(ban.GuildId))}revoke {ban.Id}` to revoke this ban.")
-                                .WithTimestamp(ban.AppealedTimestamp)
-                                .Build());
-                        }
+                    if (Context.Client.GetGuild(ban.GuildId)?
+                            .GetTextChannel(gc.LogAppealChannelId) is SocketTextChannel c)
+                    {
+                        await c.EmbedAsync(new EmbedBuilder()
+                            .WithOkColor()
+                            .WithTitle($"Ban - Case #{ban.Id}")
+                            .WithDescription($"**{ban.ReceiverName}** (`{ban.ReceiverId}`) has appealed their ban.\n```\n{ban.AppealMessage}\n```")
+                            .WithFooter($"Use `{DbContext.GetPrefixOrDefault(Context.Client.GetGuild(ban.GuildId))}revoke {ban.Id}` to revoke this ban.")
+                            .WithTimestamp(ban.AppealedTimestamp)
+                            .Build());
+                    }
 
-                        return await CommandSuccess("Your ban has been appealed and is awaiting review.");
-                    case Mute mute:
-                        if (mute.HasBeenAppealed)
-                        {
-                            return await CommandError("Mute has already been appealed.",
-                                "You have already appealed your mute.");
-                        }
+                    return await CommandSuccess("Your ban has been appealed and is awaiting review.");
+                case Mute mute:
+                    if (mute.HasBeenAppealed)
+                    {
+                        return await CommandError("Mute has already been appealed.",
+                            "You have already appealed your mute.");
+                    }
 
-                        if (string.IsNullOrWhiteSpace(message))
-                        {
-                            return await CommandError("No message specified.",
-                                "You must provide a message in your appeal.");
-                        }
+                    if (string.IsNullOrWhiteSpace(message))
+                    {
+                        return await CommandError("No message specified.",
+                            "You must provide a message in your appeal.");
+                    }
 
-                        mute.AppealMessage = message;
-                        mute.AppealedTimestamp = DateTimeOffset.UtcNow;
-                        DbContext.Update(mute);
-                        DbContext.SaveChanges();
+                    mute.AppealMessage = message;
+                    mute.AppealedTimestamp = DateTimeOffset.UtcNow;
+                    DbContext.Update(mute);
+                    DbContext.SaveChanges();
 
-                        if (Context.Client.GetGuild(mute.GuildId)?
-                                .GetTextChannel(gc.LogAppealChannelId) is SocketTextChannel ch)
-                        {
-                            await ch.EmbedAsync(new EmbedBuilder()
-                                .WithOkColor()
-                                .WithTitle($"Mute - Case #{mute.Id}")
-                                .WithDescription($"**{mute.ReceieverName}** (`{mute.ReceieverId}`) has appealed their mute.\n```\n{mute.AppealMessage}\n```")
-                                .WithFooter($"Use `{DbContext.GetPrefixOrDefault(Context.Client.GetGuild(mute.GuildId))}revoke {mute.Id}` to revoke this mute.")
-                                .WithTimestamp(mute.AppealedTimestamp)
-                                .Build());
-                        }
-                        return await CommandSuccess("Your mute has been appealed and is awaiting review.");
-                }
+                    if (Context.Client.GetGuild(mute.GuildId)?
+                            .GetTextChannel(gc.LogAppealChannelId) is SocketTextChannel ch)
+                    {
+                        await ch.EmbedAsync(new EmbedBuilder()
+                            .WithOkColor()
+                            .WithTitle($"Mute - Case #{mute.Id}")
+                            .WithDescription($"**{mute.ReceiverName}** (`{mute.ReceiverId}`) has appealed their mute.\n```\n{mute.AppealMessage}\n```")
+                            .WithFooter($"Use `{DbContext.GetPrefixOrDefault(Context.Client.GetGuild(mute.GuildId))}revoke {mute.Id}` to revoke this mute.")
+                            .WithTimestamp(mute.AppealedTimestamp)
+                            .Build());
+                    }
+                    return await CommandSuccess("Your mute has been appealed and is awaiting review.");
+                default:
+                    return await CommandError("Failed to match infraction to correct type.");
             }
-
-            return await CommandError("Mute or ban ID invalid or user unmuted/unbanned.",
-                "No mute or ban found by that ID, or you are no longer banned/muted.");
         }
 
         [RequireContext(ContextType.Guild)]
@@ -133,8 +132,8 @@ namespace Administrator.Modules.Moderation
 
                 var ban = DbContext.Add(new Ban
                 {
-                    ReceieverId = receiver.Id,
-                    ReceieverName = receiver.ToString(),
+                    ReceiverId = receiver.Id,
+                    ReceiverName = receiver.ToString(),
                     IssuerId = issuer.Id,
                     IssuerName = issuer.ToString(),
                     Reason = reason,
@@ -189,7 +188,7 @@ namespace Administrator.Modules.Moderation
                 await Context.Guild.RemoveBanAsync(guildBan.User);
             
                 if (DbContext.Infractions.OfType<Ban>().Where(x => x.GuildId == gc.Id).OrderByDescending(x => x.Id)
-                    .FirstOrDefault(x => x.ReceieverId == receiverId && !x.HasBeenRevoked) is Ban ban)
+                    .FirstOrDefault(x => x.ReceiverId == receiverId && !x.HasBeenRevoked) is Ban ban)
                 {
                     ban.HasBeenRevoked = true;
                     ban.RevocationTimestamp = DateTimeOffset.UtcNow;
@@ -201,7 +200,7 @@ namespace Administrator.Modules.Moderation
                     await logChannel.EmbedAsync(new EmbedBuilder()
                         .WithWarnColor()
                         .WithTitle($"Ban - Case #{ban.Id}")
-                        .WithDescription($"User **{ban.ReceieverName}** has been unbanned.")
+                        .WithDescription($"User **{ban.ReceiverName}** has been unbanned.")
                         .WithModerator(Context.User)
                         .WithTimestamp(ban.RevocationTimestamp)
                         .Build());
@@ -281,10 +280,10 @@ namespace Administrator.Modules.Moderation
                             ban.HasBeenRevoked = true;
                             ban.RevocationTimestamp = DateTimeOffset.UtcNow;
                             ban.RevokerId = Context.User.Id;
-                            ban.ReceieverName = Context.User.ToString();
+                            ban.ReceiverName = Context.User.ToString();
                             DbContext.Update(ban);
                             DbContext.SaveChanges();
-                            await Context.Guild.RemoveBanAsync(ban.ReceieverId);
+                            await Context.Guild.RemoveBanAsync(ban.ReceiverId);
 
                             if (Context.Guild.GetTextChannel(gc.LogBanChannelId) is null)
                             {
@@ -292,7 +291,7 @@ namespace Administrator.Modules.Moderation
                                     .WithWarnColor()
                                     .WithTitle($"Ban - Case #{ban.Id}")
                                     .WithDescription(
-                                        $"User **{ban.ReceieverName}** (`{ban.ReceieverId}`) has been unbanned.")
+                                        $"User **{ban.ReceiverName}** (`{ban.ReceiverId}`) has been unbanned.")
                                     .WithModerator(Context.User)
                                     .WithTimestamp(ban.RevocationTimestamp)
                                     .Build());
@@ -304,7 +303,7 @@ namespace Administrator.Modules.Moderation
 
                             try
                             {
-                                var dm = await Context.Client.GetUser(ban.ReceieverId).GetOrCreateDMChannelAsync();
+                                var dm = await Context.Client.GetUser(ban.ReceiverId).GetOrCreateDMChannelAsync();
                                 await dm.EmbedAsync(new EmbedBuilder()
                                     .WithOkColor()
                                     .WithTitle($"Ban - Case #{ban.Id}")
@@ -324,7 +323,7 @@ namespace Administrator.Modules.Moderation
                                 return await CommandError("Mute already revoked.", "This mute has already been revoked.");
                             }
 
-                            if (Context.Guild.GetUser(mute.ReceieverId) is SocketGuildUser receiver
+                            if (Context.Guild.GetUser(mute.ReceiverId) is SocketGuildUser receiver
                                 && Context.Guild.GetRole(gc.MuteRoleId) is SocketRole muteRole)
                             {
                                 await receiver.RemoveRoleAsync(muteRole);
@@ -338,13 +337,13 @@ namespace Administrator.Modules.Moderation
                                     .WithOkColor()
                                     .WithTitle($"Mute - Case #{mute.Id}")
                                     .WithDescription(
-                                        $"User **{mute.ReceieverName}** (`{mute.ReceieverId}`) has been unmuted.")
+                                        $"User **{mute.ReceiverName}** (`{mute.ReceiverId}`) has been unmuted.")
                                     .WithModerator(Context.User)
                                     .WithTimestamp(mute.RevocationTimestamp)
                                     .Build());
                                 try
                                 {
-                                    var dm = await Context.Client.GetUser(mute.ReceieverId).GetOrCreateDMChannelAsync();
+                                    var dm = await Context.Client.GetUser(mute.ReceiverId).GetOrCreateDMChannelAsync();
                                     await dm.EmbedAsync(new EmbedBuilder()
                                         .WithOkColor()
                                         .WithTitle($"Mute - Case #{mute.Id}")
@@ -595,7 +594,7 @@ namespace Administrator.Modules.Moderation
                     return await CommandError("Invalid mute role ID.", "This guild's mute role is not set up or was deleted.");
                 }
 
-                if (DbContext.Infractions.OfType<Mute>().Where(x => x.GuildId == gc.Id).Any(x => !x.HasBeenRevoked && !x.HasExpired && x.ReceieverId == receiver.Id)
+                if (DbContext.Infractions.OfType<Mute>().Where(x => x.GuildId == gc.Id).Any(x => !x.HasBeenRevoked && !x.HasExpired && x.ReceiverId == receiver.Id)
                     || receiver.Roles.Any(x => x.Id == muteRole.Id))
                 {
                     return await CommandError("Target already muted.", "That user is already muted.");
@@ -603,8 +602,8 @@ namespace Administrator.Modules.Moderation
 
                 var ent = DbContext.Add(new Mute
                 {
-                    ReceieverId = receiver.Id,
-                    ReceieverName = receiver.ToString(),
+                    ReceiverId = receiver.Id,
+                    ReceiverName = receiver.ToString(),
                     IssuerId = issuer.Id,
                     IssuerName = issuer.ToString(),
                     Reason = reason,
@@ -794,7 +793,7 @@ namespace Administrator.Modules.Moderation
                 var logChannel = Context.Guild.GetTextChannel(gc.LogMuteChannelId) ?? Context.Channel;
             
                 if (DbContext.Infractions.OfType<Mute>().Where(x => x.GuildId == gc.Id).OrderByDescending(x => x.Id)
-                    .FirstOrDefault(x => x.ReceieverId == receiver.Id && !x.HasBeenRevoked) is Mute mute)
+                    .FirstOrDefault(x => x.ReceiverId == receiver.Id && !x.HasBeenRevoked) is Mute mute)
                 {
                     mute.HasBeenRevoked = true;
                     mute.RevocationTimestamp = DateTimeOffset.UtcNow;

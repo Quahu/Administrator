@@ -57,7 +57,8 @@ namespace Administrator.Common
             }
             catch (Exception ex)
             {
-                Log.Fatal($"There was a problem creating the bot configuation - a restart is required: ({ex.Message})");
+                Log.Fatal("There was a problem creating the bot configuation - a restart is required.");
+                Log.Fatal(ex, ex.ToString);
                 Console.ReadKey();
                 Environment.Exit(-1);
             }
@@ -65,6 +66,7 @@ namespace Administrator.Common
 
         public const ushort PREFIX_MAX_LENGTH = 25;
         public const ushort PHRASE_MIN_LENGTH = 3;
+        public const string INVITE_REGEX_PATTERN = @"discord(?:\.com|\.gg)[\/invite\/]?(?:(?!.*[Ii10OolL]).[a-zA-Z0-9]{5,6}|[a-zA-Z0-9\-]{2,32})";
 
         public static string Token { get; private set; }
 

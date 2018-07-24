@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using Discord;
@@ -22,7 +21,7 @@ namespace Administrator.Services
         public static void Initialize(IServiceProvider services)
         {
             _startTime = DateTimeOffset.UtcNow;
-            _client = services.GetService<DiscordSocketClient>();
+            _client = services.GetRequiredService<DiscordSocketClient>();
             CommandsExecuted = new Dictionary<ulong, uint>();
             MessagesReceived = new Dictionary<ulong, uint>();
             Log.Info("Initialized.");
