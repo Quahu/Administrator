@@ -79,10 +79,10 @@ namespace Administrator.Modules.Configuration
                     "Could not find a role by that name to set as the permrole.");
             }
 
-            var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+            var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
             gc.PermRoleId = newPermRole.Id;
-            DbContext.Update(gc);
-            DbContext.SaveChanges();
+            Context.Database.Update(gc);
+            Context.Database.SaveChanges();
             return CommandSuccess($"Permrole has been updated to role **{newPermRole.Name}** (`{newPermRole.Id}`).");
         }
 
@@ -93,7 +93,7 @@ namespace Administrator.Modules.Configuration
         [RequireGuildOwner]
         private Task<RuntimeResult> GetOrSetPermRole()
         {
-            var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+            var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
             if (!gc.PermRoleId.HasValue)
             {
                 return CommandError("Permrole not set.",
@@ -118,13 +118,13 @@ namespace Administrator.Modules.Configuration
             [Usage("showconfig")]
             private Task<RuntimeResult> ShowGuildConfig()
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 return CommandSuccess(embed: new EmbedBuilder()
                     .WithOkColor()
                     .WithTitle($"Guild configuration for {Context.Guild.Name}")
                     .WithThumbnailUrl(Context.Guild.IconUrl)
                     .AddField("General",
-                        $"**Prefix**: \"{DbContext.GetPrefixOrDefault(Context.Guild)}\"\n" +
+                        $"**Prefix**: \"{Context.Database.GetPrefixOrDefault(Context.Guild)}\"\n" +
                         $"**Permrole**: {Context.Guild.GetRole(gc.PermRoleId.GetValueOrDefault())?.Name ?? "Not set"}\n" + // shouldn't happen?
                         $"**Mute role**: {Context.Guild.GetRole(gc.MuteRoleId)?.Name ?? "Not set"} ({gc.MuteRole.ToString().ToLower()}d)\n" +
                         $"**Looking to Play role**: {Context.Guild.GetRole(gc.LtpRoleId)?.Name ?? "Not set"} ({gc.LtpRole.ToString().ToLower()}d)\n" +
@@ -153,7 +153,7 @@ namespace Administrator.Modules.Configuration
                     .AddField("Greetings",
                         $"**Functionality**: {gc.Greetings.ToString().ToLower()}d\n" +
                         $"**Greeting channel**: {Context.Guild.GetTextChannel(gc.GreetChannelId)?.Mention ?? "Not set"}\n" +
-                        $"**Greeting message**: Use `{DbContext.GetPrefixOrDefault(Context.Guild)}greetmessage` to view\n" +
+                        $"**Greeting message**: Use `{Context.Database.GetPrefixOrDefault(Context.Guild)}greetmessage` to view\n" +
                         $"**Greeting timeout**: {(gc.GreetTimeout is TimeSpan ts1 ? StringExtensions.FormatTimeSpan(ts1) : "Disabled")}", true)
                     .Build());
             }
@@ -176,10 +176,10 @@ namespace Administrator.Modules.Configuration
 
                 newPrefix = newPrefix.Replace("\n", string.Empty);
 
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.Prefix = newPrefix;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess($"Prefix on this guild has been changed to \"{newPrefix}\".");
             }
 
@@ -189,7 +189,7 @@ namespace Administrator.Modules.Configuration
             [Usage("prefix", "prefix .")]
             [Remarks("Prefixes are limited to {prefixmaxlength} characters in length. If you wish to have (trailing) space in your prefix, wrap it in \"quotes \".")]
             private Task<RuntimeResult> GetOrSetPrefix()
-                => CommandSuccess($"Prefix on this guild is \"{DbContext.GetPrefixOrDefault(Context.Guild)}\".");
+                => CommandSuccess($"Prefix on this guild is \"{Context.Database.GetPrefixOrDefault(Context.Guild)}\".");
 
             [Command("muterole", RunMode = RunMode.Async)]
             [Summary("Gets or sets the guild's mute role.\n\n" +
@@ -282,13 +282,13 @@ namespace Administrator.Modules.Configuration
                         "Could not find a role by that name to set as the mute role.");
                 }
 
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.MuteRoleId = newMuteRole.Id;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess($"Mute role on this guild has been updated to role **{newMuteRole.Name}** (`{newMuteRole.Id}`).\n" +
                                       $"Note: mute role functionality is currently **{gc.MuteRole.ToString().ToLower()}d**.\n" +
-                                      $"Use `{DbContext.GetPrefixOrDefault(Context.Guild)}muterole enable/disable` to modify it.");
+                                      $"Use `{Context.Database.GetPrefixOrDefault(Context.Guild)}muterole enable/disable` to modify it.");
             }
 
             [Command("muterole")]
@@ -299,7 +299,7 @@ namespace Administrator.Modules.Configuration
             [Usage("muterole Silenced", "muterole disable")]
             private Task<RuntimeResult> GetOrSetMuteRole()
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 var s = "Mute role for this guild is currently not set up.\n" +
                         $"Mute role functionality is currently **{gc.MuteRole.ToString().ToLower()}d**.";
                 if (Context.Guild.GetRole(gc.MuteRoleId) is SocketRole muteRole)
@@ -319,10 +319,10 @@ namespace Administrator.Modules.Configuration
             [Priority(1)]
             private Task<RuntimeResult> GetOrSetLtpRole(Functionality mode)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.LtpRole = mode;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess($"Looking to Play role functionality on this guild is now **{mode.ToString().ToLower()}d**.");
             }
 
@@ -342,10 +342,10 @@ namespace Administrator.Modules.Configuration
                         "Could not find a role by that name to set as the Looking to Play role.");
                 }
 
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.LtpRoleId = newLtpRole.Id;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess($"Looking to Play role on this guild has been updated to role **{newLtpRole.Name}** (`{newLtpRole.Id}`).\n" +
                                       $"Note: Looking to Play role functionality is currently **{gc.LtpRole.ToString().ToLower()}d**.");
             }
@@ -358,7 +358,7 @@ namespace Administrator.Modules.Configuration
             [Usage("ltprole Looking to Play", "ltprole disable")]
             private Task<RuntimeResult> GetOrSetLtpRole()
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 var s = "Looking to Play role on this guild is currently not set up.\n" +
                         $"Looking to Play role functionality is currently **{gc.LtpRole.ToString().ToLower()}d**.";
                 if (Context.Guild.GetRole(gc.LtpRoleId) is SocketRole ltpRole)
@@ -384,10 +384,10 @@ namespace Administrator.Modules.Configuration
                         "The timespan provided is shorter than 1 minute.");
                 }
 
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.LtpRoleTimeout = timeout;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"Looking to Play role timeout on this guild has been updated to **{StringExtensions.FormatTimeSpan(timeout)}**.");
             }
@@ -402,10 +402,10 @@ namespace Administrator.Modules.Configuration
             private Task<RuntimeResult> GetOrSetLtpTimeout(int mustBeZero)
             {
                 if (mustBeZero != 0) return CommandError("Input was non-zero.");
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.LtpRoleTimeout = null;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess("Looking to Play role timeout on this guild has been **disabled**.");
             }
 
@@ -418,7 +418,7 @@ namespace Administrator.Modules.Configuration
             [Priority(0)]
             private Task<RuntimeResult> GetOrSetLtpTimeout()
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 return CommandSuccess(
                     $"Looking to Play role timeout on this guild is currently **{(gc.LtpRoleTimeout is TimeSpan timeout ? StringExtensions.FormatTimeSpan(timeout) : "disabled")}**.");
             }
@@ -433,7 +433,7 @@ namespace Administrator.Modules.Configuration
                 "Note: some commands require events to be logged to function correctly, notably Appeal, Ban, Mute, and Warn.")]
             private Task<RuntimeResult> SetLogChannel(LogType type)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 var isDisabled = false;
                 switch (type)
                 {
@@ -524,8 +524,8 @@ namespace Administrator.Modules.Configuration
                         break;
                 }
 
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess($"**{type}** events will now {(isDisabled ? "no longer " : string.Empty)}be logged in this channel.");
             }
 
@@ -536,10 +536,10 @@ namespace Administrator.Modules.Configuration
             [Remarks("Note: this does not disable the \"suggest\" command, but it does prevent it from functioning.")]
             private Task<RuntimeResult> GetOrSetSuggestionFunctionality(Functionality mode)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.Suggestions = mode;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"Suggestion functionality on this guild has been **{mode.ToString().ToLower()}d**.");
             }
@@ -551,7 +551,7 @@ namespace Administrator.Modules.Configuration
             [Remarks("Note: this does not disable the \"suggest\" command, but it does prevent it from functioning.")]
             private Task<RuntimeResult> GetOrSetSuggestionFunctionality()
                 => CommandSuccess(
-                    $"Suggestion functionality on this guild is currently **{DbContext.GetOrCreateGuildConfig(Context.Guild).Suggestions.ToString().ToLower()}d**.");
+                    $"Suggestion functionality on this guild is currently **{Context.Database.GetOrCreateGuildConfig(Context.Guild).Suggestions.ToString().ToLower()}d**.");
 
             [Command("suggestionchannel")]
             [Summary("Gets or sets the guild's suggestion channel.\n" +
@@ -560,10 +560,10 @@ namespace Administrator.Modules.Configuration
             [Usage("suggestionchannel #suggestions")]
             private Task<RuntimeResult> GetOrSetSuggestionChannel(ITextChannel channel)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.SuggestionChannelId = channel.Id;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"Suggestion channel for this guild has been updated to {channel.Mention} (`{channel.Id}`).");
             }
@@ -575,7 +575,7 @@ namespace Administrator.Modules.Configuration
             [Usage("suggestionchannel #suggestions")]
             private Task<RuntimeResult> GetOrSetSuggestionChannel()
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 if (Context.Guild.GetTextChannel(gc.SuggestionChannelId) is SocketTextChannel c)
                 {
                     return CommandSuccess(
@@ -594,10 +594,10 @@ namespace Administrator.Modules.Configuration
                 "Note: If this functionality is disabled, suggestions can still be approved or denied, but will simply be removed.")]
             private Task<RuntimeResult> GetOrSetSuggestionArchiveFunctionality(Functionality mode)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.ArchiveSuggestions = mode;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"Suggestion archiving functionality on this guild has been **{mode.ToString().ToLower()}d**.");
             }
@@ -611,7 +611,7 @@ namespace Administrator.Modules.Configuration
                 "Note: If this functionality is disabled, suggestions can still be approved or denied, but will simply be removed.")]
             private Task<RuntimeResult> GetOrSetSuggestionArchiveFunctionality()
                 => CommandSuccess(
-                    $"Suggestion archiving functionality on this guild is currently **{DbContext.GetOrCreateGuildConfig(Context.Guild).ArchiveSuggestions.ToString().ToLower()}d**.");
+                    $"Suggestion archiving functionality on this guild is currently **{Context.Database.GetOrCreateGuildConfig(Context.Guild).ArchiveSuggestions.ToString().ToLower()}d**.");
 
             [Command("suggestionarchive")]
             [Summary("Gets or sets the guild's suggestion archive channel.\n" +
@@ -620,10 +620,10 @@ namespace Administrator.Modules.Configuration
             [Usage("suggestionarchive #suggestion-archive")]
             private Task<RuntimeResult> GetOrSetSuggestionArchiveChannel(ITextChannel channel)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.SuggestionArchiveId = channel.Id;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"Suggestion archive channel has been updated to {channel.Mention} (`{channel.Id}`).");
             }
@@ -635,7 +635,7 @@ namespace Administrator.Modules.Configuration
             [Usage("suggestionarchive #suggestion-archive")]
             private Task<RuntimeResult> GetOrSetSuggestionArchiveChannel()
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 if (Context.Guild.GetTextChannel(gc.SuggestionArchiveId) is SocketTextChannel c)
                 {
                     return CommandSuccess(
@@ -654,10 +654,10 @@ namespace Administrator.Modules.Configuration
             [Usage("greetings enable")]
             private Task<RuntimeResult> SetGreetingFunctionality(Functionality mode)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.Greetings = mode;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"Greeting functionality on this guild has been **{mode.ToString().ToLower()}d**.");
             }
@@ -671,7 +671,7 @@ namespace Administrator.Modules.Configuration
             [Usage("greetings enable")]
             private Task<RuntimeResult> SetGreetingFunctionality()
                 => CommandSuccess(
-                    $"Greeting functionality on this guild is currently **{DbContext.GetOrCreateGuildConfig(Context.Guild).Greetings.ToString().ToLower()}d**.");
+                    $"Greeting functionality on this guild is currently **{Context.Database.GetOrCreateGuildConfig(Context.Guild).Greetings.ToString().ToLower()}d**.");
 
             [Command("greetchannel")]
             [Summary("Sets the guild's greeting channel.\n" +
@@ -682,10 +682,10 @@ namespace Administrator.Modules.Configuration
             [Usage("greetchannel #welcome")]
             private Task<RuntimeResult> SetGreetingChannel(ITextChannel channel)
             {
-				var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+				var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.GreetChannelId = channel.Id;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess($"Greeting channel for this guild has been updated to channel **{channel.Mention}** (`{channel.Id}`)");
             }
             
@@ -698,7 +698,7 @@ namespace Administrator.Modules.Configuration
             [Usage("greetchannel #welcome")]
             private Task<RuntimeResult> SetGreetingChannel()
             {
-            	var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+            	var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 
                 if (Context.Guild.GetTextChannel(gc.GreetChannelId) is SocketTextChannel c)
                 {
@@ -718,10 +718,10 @@ namespace Administrator.Modules.Configuration
             [Usage("greettimeout 1m", "greettimeout 0")]
             private Task<RuntimeResult> SetGreetTimeout(TimeSpan timeout)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.GreetTimeout = timeout;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"Greeting timeout on this guild has been updated to **{StringExtensions.FormatTimeSpan(timeout)}**.");
             }
@@ -737,10 +737,10 @@ namespace Administrator.Modules.Configuration
             private Task<RuntimeResult> SetGreetTimeout(int mustBeZero)
             {
                 if (mustBeZero != 0) return CommandError("Input was non-zero.");
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.GreetTimeout = null;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess($"Greeting timeout on this guild has been **disabled**.");
             }
 
@@ -754,7 +754,7 @@ namespace Administrator.Modules.Configuration
             [Usage("greettimeout 1m", "greettimeout 0")]
             private Task<RuntimeResult> SetGreetTimeout()
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
 
                 if (gc.GreetTimeout is TimeSpan timeout)
                 {
@@ -780,12 +780,12 @@ namespace Administrator.Modules.Configuration
                     return CommandError("Message cannot be null or whitespace.",
                         "The greet message cannot be null or only whitespace.");
 
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.GreetMessage = message;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess(
-                    $"Greet message for this guild has been updated. Use `{DbContext.GetPrefixOrDefault(Context.Guild)}greetmessage` to view it.");
+                    $"Greet message for this guild has been updated. Use `{Context.Database.GetPrefixOrDefault(Context.Guild)}greetmessage` to view it.");
             }
 
             [Command("greetmessage")]
@@ -799,7 +799,7 @@ namespace Administrator.Modules.Configuration
             [Usage("greetmessage Welcome to {guild}, {user}!")]
             private Task<RuntimeResult> SetGreetMessage()
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 var greetmsg = gc.GreetMessage.FormatPlaceHolders(Context.User, Context.Guild);
                 return TomlEmbed.TryParse(greetmsg, out var result) ? CommandSuccess(result.Plaintext, result.ToEmbed()) : CommandSuccess(greetmsg);
             }
@@ -811,7 +811,7 @@ namespace Administrator.Modules.Configuration
             [Usage("upvotearrow ⬆")]
             private Task<RuntimeResult> SetUpvoteArrow(string emoteStr)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
 
                 if (Emote.TryParse(emoteStr, out var result))
                 {
@@ -821,16 +821,16 @@ namespace Administrator.Modules.Configuration
                     }
 
                     gc.UpvoteArrow = result.ToString();
-                    DbContext.Update(gc);
-                    DbContext.SaveChanges();
+                    Context.Database.Update(gc);
+                    Context.Database.SaveChanges();
                     return CommandSuccess($"Upvote arrow emote on this guild has been updated to {result}.");
                 }
 
                 if (emoteStr.IsEmoji())
                 {
                     gc.UpvoteArrow = emoteStr;
-                    DbContext.Update(gc);
-                    DbContext.SaveChanges();
+                    Context.Database.Update(gc);
+                    Context.Database.SaveChanges();
                     return CommandSuccess($"Upvote arrow emote on this guild has been updated to {emoteStr}.");
                 }
 
@@ -844,7 +844,7 @@ namespace Administrator.Modules.Configuration
             [Usage("upvotearrow ⬆")]
             private Task<RuntimeResult> SetUpvoteArrow()
                 => CommandSuccess(
-                    $"Upvote arrow for this guild is currently set to {DbContext.GetOrCreateGuildConfig(Context.Guild).UpvoteArrow}");
+                    $"Upvote arrow for this guild is currently set to {Context.Database.GetOrCreateGuildConfig(Context.Guild).UpvoteArrow}");
 
             [Command("downvotearrow")]
             [Summary("Sets the guild's downvote arrow emote.\n" +
@@ -853,7 +853,7 @@ namespace Administrator.Modules.Configuration
             [Usage("downvotearrow ⬆")]
             private Task<RuntimeResult> SetDownvoteArrow(string emoteStr)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
 
                 if (Emote.TryParse(emoteStr, out var result))
                 {
@@ -863,16 +863,16 @@ namespace Administrator.Modules.Configuration
                     }
 
                     gc.DownvoteArrow = result.ToString();
-                    DbContext.Update(gc);
-                    DbContext.SaveChanges();
+                    Context.Database.Update(gc);
+                    Context.Database.SaveChanges();
                     return CommandSuccess($"Downvote arrow emote on this guild has been updated to {result}.");
                 }
 
                 if (emoteStr.IsEmoji())
                 {
                     gc.DownvoteArrow = emoteStr;
-                    DbContext.Update(gc);
-                    DbContext.SaveChanges();
+                    Context.Database.Update(gc);
+                    Context.Database.SaveChanges();
                     return CommandSuccess($"Downvote arrow emote on this guild has been updated to {emoteStr}.");
                 }
 
@@ -886,7 +886,7 @@ namespace Administrator.Modules.Configuration
             [Usage("upvotearrow ⬆")]
             private Task<RuntimeResult> SetDownvoteArrow()
                 => CommandSuccess(
-                    $"Downvote arrow for this guild is currently set to {DbContext.GetOrCreateGuildConfig(Context.Guild).DownvoteArrow}");
+                    $"Downvote arrow for this guild is currently set to {Context.Database.GetOrCreateGuildConfig(Context.Guild).DownvoteArrow}");
 
             [Command("trackrespects")]
             [Summary("Enables or disables respects-tracking functionality on this guild.\n" +
@@ -895,10 +895,10 @@ namespace Administrator.Modules.Configuration
             [Usage("trackrespects disable")]
             private Task<RuntimeResult> SetRespectsFunctionality(Functionality mode)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.TrackRespects = mode;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"Respects tracking functionality on this guild has been **{mode.ToString().ToLower()}d**.");
             }
@@ -910,7 +910,7 @@ namespace Administrator.Modules.Configuration
             [Usage("trackrespects disable")]
             private Task<RuntimeResult> SetRespectsFunctionality()
                 => CommandSuccess(
-                    $"Respects tracking functionality on this guild is currently **{DbContext.GetOrCreateGuildConfig(Context.Guild).TrackRespects.ToString().ToLower()}d**.");
+                    $"Respects tracking functionality on this guild is currently **{Context.Database.GetOrCreateGuildConfig(Context.Guild).TrackRespects.ToString().ToLower()}d**.");
 
             [Command("filterinvites")]
             [Summary("Enables or disables invite-filtering functionality on this guild.\n" +
@@ -921,10 +921,10 @@ namespace Administrator.Modules.Configuration
                 "Note: in order to detect invites for this guild to ignore, the bot needs ManageGuild permissions.")]
             private Task<RuntimeResult> SetInviteFilteringFunctionality(Functionality mode)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.FilterInvites = mode;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess($"Invite filtering on this guild is now **{mode.ToString().ToLower()}d**.");
             }
 
@@ -937,7 +937,7 @@ namespace Administrator.Modules.Configuration
                 "Note: in order to detect invites for this guild to ignore, the bot needs ManageGuild permissions.")]
             private Task<RuntimeResult> SetInviteFilteringFunctionality()
                 => CommandSuccess(
-                    $"Invite filtering on this guild is currently **{DbContext.GetOrCreateGuildConfig(Context.Guild).FilterInvites.ToString().ToLower()}d**.");
+                    $"Invite filtering on this guild is currently **{Context.Database.GetOrCreateGuildConfig(Context.Guild).FilterInvites.ToString().ToLower()}d**.");
 
             [Command("invitecode")]
             [Summary("Sets the guild's custom invite code.\n" +
@@ -948,17 +948,17 @@ namespace Administrator.Modules.Configuration
             [Remarks("Note: only the code is needed, not the full link.")]
             private Task<RuntimeResult> SetInviteCode(string code = null)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 if (string.IsNullOrWhiteSpace(code))
                 {
                     gc.InviteCode = null;
-                    DbContext.Update(gc);
+                    Context.Database.Update(gc);
                     return CommandSuccess("Invite code for this guild has been **disabled**.");
                 }
 
                 gc.InviteCode = code;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess($"Invite code for this guild has been updated to `{code}`.");
             }
 
@@ -969,7 +969,7 @@ namespace Administrator.Modules.Configuration
             [Remarks("Note: Length must be greater than or equal to {phraseminlength}.")]
             private Task<RuntimeResult> SetPhraseMinimumLength(ushort? length = null)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 if (length is null)
                 {
                     return CommandSuccess(
@@ -984,8 +984,8 @@ namespace Administrator.Modules.Configuration
                 }
 
                 gc.MinimumPhraseLength = length.Value;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"Minimum phrase length for this guild has been updated to **{length}** characters.");
             }
@@ -997,10 +997,10 @@ namespace Administrator.Modules.Configuration
             [Usage("verboseerrors enable")]
             private Task<RuntimeResult> SetVerboseErrors(Functionality mode)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 gc.VerboseErrors = mode;
-                DbContext.Update(gc);
-                DbContext.SaveChanges();
+                Context.Database.Update(gc);
+                Context.Database.SaveChanges();
                 return CommandSuccess($"Verbose errors for this guild are now **{mode.ToString().ToLower()}d**.");
             }
 
@@ -1011,7 +1011,7 @@ namespace Administrator.Modules.Configuration
             [Usage("verboseerrors enable")]
             private Task<RuntimeResult> SetVerboseErrors()
                 => CommandSuccess(
-                    $"Verbose errors for this guild are currently **{DbContext.GetOrCreateGuildConfig(Context.Guild).VerboseErrors.ToString().ToLower()}d**.");
+                    $"Verbose errors for this guild are currently **{Context.Database.GetOrCreateGuildConfig(Context.Guild).VerboseErrors.ToString().ToLower()}d**.");
         }
     }
 }

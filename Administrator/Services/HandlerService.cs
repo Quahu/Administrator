@@ -98,7 +98,7 @@ namespace Administrator.Services
             if (newMsg.Content.Equals(oldMsg.Content)) return;
 
             using (var scope = _services.CreateScope())
-            using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
+            using (var ctx = scope.ServiceProvider.GetRequiredService<AdminContext>())
             {
                 var gc = ctx.GetOrCreateGuildConfig(chnl.Guild);
                 if (!(chnl.Guild.GetTextChannel(gc.LogMessageUpdatedChannelId) is SocketTextChannel logChannel)) return;
@@ -120,7 +120,7 @@ namespace Administrator.Services
         private static async Task HandleUserUnbannedAsync(SocketUser user, SocketGuild guild)
         {
             using (var scope = _services.CreateScope())
-            using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
+            using (var ctx = scope.ServiceProvider.GetRequiredService<AdminContext>())
             {
                 var gc = ctx.GetOrCreateGuildConfig(guild);
                 if (!(guild.GetTextChannel(gc.LogUnbanChannelId) is SocketTextChannel logChannel)) return;
@@ -155,7 +155,7 @@ namespace Administrator.Services
         private static async Task HandleUserJoinedAsync(SocketGuildUser user)
         {
             using (var scope = _services.CreateScope())
-            using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
+            using (var ctx = scope.ServiceProvider.GetRequiredService<AdminContext>())
             {
                 var gc = ctx.GetOrCreateGuildConfig(user.Guild);
                 if (!(user.Guild.GetTextChannel(gc.LogJoinChannelId) is SocketTextChannel logChannel)) return;
@@ -217,7 +217,7 @@ namespace Administrator.Services
         private static async Task HandleUserLeftAsync(SocketGuildUser user)
         {
             using (var scope = _services.CreateScope())
-            using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
+            using (var ctx = scope.ServiceProvider.GetRequiredService<AdminContext>())
             {
                 var gc = ctx.GetOrCreateGuildConfig(user.Guild);
                 if (!(user.Guild.GetTextChannel(gc.LogJoinChannelId) is SocketTextChannel logChannel)) return;
@@ -236,7 +236,7 @@ namespace Administrator.Services
         private static async Task HandleUserBannedAsync(SocketUser user, SocketGuild guild)
         {
             using (var scope = _services.CreateScope())
-            using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
+            using (var ctx = scope.ServiceProvider.GetRequiredService<AdminContext>())
             {
                 var gc = ctx.GetOrCreateGuildConfig(guild);
                 if (!(guild.GetTextChannel(gc.LogBanChannelId) is SocketTextChannel logChannel)) return;
@@ -282,8 +282,8 @@ namespace Administrator.Services
             {
                 if (msg.Attachments.FirstOrDefault(x => x.Url.IsImageUrl()) is Attachment a)
                 {
-                    var stream = await _services.GetService<HttpClient>().GetStreamAsync(a.Url);
-                    var endpoint = new ImageEndpoint(_services.GetService<ImgurClient>());
+                    var stream = await _services.GetRequiredService<HttpClient>().GetStreamAsync(a.Url);
+                    var endpoint = new ImageEndpoint(_services.GetRequiredService<ImgurClient>());
                     var img = await endpoint.UploadImageStreamAsync(stream);
                     url = img.Link;
                 }
@@ -295,7 +295,7 @@ namespace Administrator.Services
             
             
             using (var scope = _services.CreateScope())
-            using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
+            using (var ctx = scope.ServiceProvider.GetRequiredService<AdminContext>())
             {
                 if (!(channel is SocketTextChannel chnl)) return;
                 var gc = ctx.GetOrCreateGuildConfig(chnl.Guild);
@@ -321,7 +321,7 @@ namespace Administrator.Services
             {
                 Log.Error(ex, ex.ToString);
                 using (var scope = _services.CreateScope())
-                using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
+                using (var ctx = scope.ServiceProvider.GetRequiredService<AdminContext>())
                 {
                     var gc = ctx.GetOrCreateGuildConfig(guild);
                     if (gc.VerboseErrors == Functionality.Enable)
@@ -338,15 +338,15 @@ namespace Administrator.Services
                 || await TryFilterMessageAsync(msg)
                 || msg.Author.IsBot) return;
 
-            var commands = _services.GetService<CommandService>();
-            var context = new SocketCommandContext(_services.GetService<DiscordSocketClient>(), msg);
-            var argPos = 0;
-
-            StatsService.IncrementMessagesReceived(context.Guild);
-
             using (var scope = _services.CreateScope())
-            using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
+            using (var ctx = scope.ServiceProvider.GetRequiredService<AdminContext>())
             {
+                var commands = _services.GetRequiredService<CommandService>();
+                var context = new AdminCommandContext(_services.GetRequiredService<DiscordSocketClient>(), msg, ctx);
+                var argPos = 0;
+
+                StatsService.IncrementMessagesReceived(context.Guild);
+
                 if (msg.Content.Equals($"{BotConfig.Prefix}prefix", StringComparison.OrdinalIgnoreCase))
                 {
                     if (context.Channel is IPrivateChannel)
@@ -412,7 +412,7 @@ namespace Administrator.Services
             if (!(msg.Author is SocketGuildUser u)) return false;
 
             using (var scope = _services.CreateScope())
-            using (var ctx = scope.ServiceProvider.GetService<AdminContext>())
+            using (var ctx = scope.ServiceProvider.GetRequiredService<AdminContext>())
             {
                 var gc = ctx.GetOrCreateGuildConfig(u.Guild);
 

@@ -18,6 +18,8 @@ namespace Administrator.Modules.Permissions
     [RequireContext(ContextType.Guild)]
     public class PermissionCommands : AdminBase
     {
+        public CommandService Commands { get; set; }
+
         [Command("addpermission")]
         [Alias("addperm", "ap")]
         [Summary("Add a permission to the permission list.\n" +
@@ -72,7 +74,7 @@ namespace Administrator.Modules.Permissions
             PermissionType type;
             string cmdOrMod;
             var isCommand = false;
-            var regex = new Regex(Regex.Escape(DbContext.GetPrefixOrDefault(Context.Guild)));
+            var regex = new Regex(Regex.Escape(Context.Database.GetPrefixOrDefault(Context.Guild)));
 
             if (Commands.Modules.FirstOrDefault(x => x.Name.Equals(commandOrModule, StringComparison.OrdinalIgnoreCase)) is ModuleInfo module)
             {
@@ -92,7 +94,7 @@ namespace Administrator.Modules.Permissions
                     "Could not find a command or module by that name.");
             }
 
-            var ent = DbContext.Add(new Permission
+            var ent = Context.Database.Add(new Permission
             {
                 CommandOrModule = cmdOrMod,
                 Filter = filter,
@@ -101,7 +103,7 @@ namespace Administrator.Modules.Permissions
                 Functionality = functionality,
                 GuildId = Context.Guild.Id
             }).Entity;
-            DbContext.SaveChanges();
+            Context.Database.SaveChanges();
             var s =
                 $"{ent.Functionality}d `{cmdOrMod}` {(isCommand ? "command" : "module")}";
             switch (ent.Filter)
@@ -134,7 +136,7 @@ namespace Administrator.Modules.Permissions
         [Usage("rp 10", "rp")]
         private Task<RuntimeResult> RemovePermission(uint? id = null)
         {
-            var perms = DbContext.Permissions.Where(x => x.GuildId == Context.Guild.Id)
+            var perms = Context.Database.Permissions.Where(x => x.GuildId == Context.Guild.Id)
                 .OrderByDescending(x => x.Id)
                 .ToList();
 
@@ -160,7 +162,7 @@ namespace Administrator.Modules.Permissions
                     "No permission found by that ID.");
             }
 
-            DbContext.Remove(perm);
+            Context.Database.Remove(perm);
 
             string s;
             switch (perm.Filter)
@@ -183,7 +185,7 @@ namespace Administrator.Modules.Permissions
                 .WithWarnColor()
                 .WithTitle($"Permission #{perm.Id} removed.")
                 .WithDescription(
-                    $"```\n{DbContext.GetPrefixOrDefault(Context.Guild)}ap {perm.CommandOrModule} {perm.Functionality.ToString().ToLower()}{s}\n```")
+                    $"```\n{Context.Database.GetPrefixOrDefault(Context.Guild)}ap {perm.CommandOrModule} {perm.Functionality.ToString().ToLower()}{s}\n```")
                 .WithModerator(Context.User)
                 .WithTimestamp(DateTimeOffset.UtcNow)
                 .Build());
@@ -196,7 +198,7 @@ namespace Administrator.Modules.Permissions
         [Usage("lp")]
         private Task<RuntimeResult> ListPermissions(uint page = 1)
         {
-            var perms = DbContext.Permissions.Where(x => x.GuildId == Context.Guild.Id).OrderBy(x => x.Id).ToList();
+            var perms = Context.Database.Permissions.Where(x => x.GuildId == Context.Guild.Id).OrderBy(x => x.Id).ToList();
 
             if (!perms.Any())
             {
@@ -215,7 +217,7 @@ namespace Administrator.Modules.Permissions
             foreach (var perm in perms)
             {
                 s +=
-                    $"**{perm.Id}.** {DbContext.GetPrefixOrDefault(Context.Guild)}ap {perm.CommandOrModule} {perm.Functionality.ToString().ToLower()} ";
+                    $"**{perm.Id}.** {Context.Database.GetPrefixOrDefault(Context.Guild)}ap {perm.CommandOrModule} {perm.Functionality.ToString().ToLower()} ";
                 switch (perm.Filter)
                 {
                     case PermissionFilter.Channel:

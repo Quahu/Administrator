@@ -9,7 +9,7 @@ using Discord.WebSocket;
 
 namespace Administrator.Common
 {
-    public abstract class AdminBase : AdminBase<SocketCommandContext>
+    public abstract class AdminBase : AdminBase<AdminCommandContext>
     {
     }
 
@@ -17,42 +17,38 @@ namespace Administrator.Common
     {
         private readonly Stopwatch _watch = Stopwatch.StartNew();
 
-        public AdminContext DbContext { get; set; }
-
-        public CommandService Commands { get; set; }
-
-        public Task<RuntimeResult> CommandError(string reason, string message = null,
+        protected Task<RuntimeResult> CommandError(string reason, string message = null,
             Embed embed = null)
             => Task.FromResult<RuntimeResult>(AdminResult.FromError(_watch.Elapsed, reason, message, embed));
 
-        public Task<RuntimeResult> CommandSuccess(string message = null, Embed embed = null)
+        protected Task<RuntimeResult> CommandSuccess(string message = null, Embed embed = null)
             => Task.FromResult<RuntimeResult>(AdminResult.FromSuccess(_watch.Elapsed, message, embed));
 
-        public async Task<IUserMessage> EmbedAsync(Embed embed, TimeSpan? timeout = null)
+        protected async Task<IUserMessage> EmbedAsync(Embed embed, TimeSpan? timeout = null)
             => await Context.Channel.EmbedAsync(embed, timeout);
 
-        public async Task<IUserMessage> SendOkAsync(string message, TimeSpan? timeout = null)
+        protected async Task<IUserMessage> SendOkAsync(string message, TimeSpan? timeout = null)
             => await Context.Channel.SendOkAsync(message, timeout);
 
-        public async Task<IUserMessage> SendErrorAsync(string message, TimeSpan? timeout = null)
+        protected async Task<IUserMessage> SendErrorAsync(string message, TimeSpan? timeout = null)
             => await Context.Channel.SendErrorAsync(message, timeout);
 
-        public async Task<IUserMessage> SendWarnAsync(string message, TimeSpan? timeout = null)
+        protected async Task<IUserMessage> SendWarnAsync(string message, TimeSpan? timeout = null)
             => await Context.Channel.SendWarnAsync(message, timeout);
 
-        public async Task<IUserMessage> SendWinAsync(string message, TimeSpan? timeout = null)
+        protected async Task<IUserMessage> SendWinAsync(string message, TimeSpan? timeout = null)
             => await Context.Channel.SendWinAsync(message, timeout);
 
-        public async Task<IUserMessage> SendLoseAsync(string message, TimeSpan? timeout = null)
+        protected async Task<IUserMessage> SendLoseAsync(string message, TimeSpan? timeout = null)
             => await Context.Channel.SendLoseAsync(message, timeout);
 
-        public async Task AddCheckAsync()
+        protected async Task AddCheckAsync()
             => await Context.Message.AddReactionAsync(new Emoji("\U00002705"));
 
-        public async Task AddCrossAsync()
+        protected async Task AddCrossAsync()
             => await Context.Message.AddReactionAsync(new Emoji("\U0000274c"));
 
-        public async Task<SocketMessage> GetNextMessageAsync(NextMessageCriteria criteria, TimeSpan? timeout = null)
+        protected async Task<SocketMessage> GetNextMessageAsync(NextMessageCriteria criteria, TimeSpan? timeout = null)
         {
             var eventTrigger = new TaskCompletionSource<SocketMessage>();
 

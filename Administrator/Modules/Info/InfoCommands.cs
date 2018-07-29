@@ -18,6 +18,8 @@ namespace Administrator.Modules.Info
     [RequirePermissionsPass]
     public class InfoCommands : AdminBase
     {
+        public CommandService Commands { get; set; }
+
         [Command("userinfo")]
         [Alias("uinfo")]
         [Summary("Gets a user's info, including roles, join date, and other info. Defaults to yourself.")]
@@ -65,45 +67,63 @@ namespace Administrator.Modules.Info
                 .Build());
         }
 
-        [Command("ping", RunMode = RunMode.Async)]
+        [Command("ping")]
         [Summary("Checks the bot's Discord API latency.")]
         [Usage("ping")]
-        private async Task<RuntimeResult> PingAsync()
+        private Task<RuntimeResult> PingAsync()
         {
-            IUserMessage message;
-            Stopwatch stopwatch;
-            var heartbeat = Context.Client.Latency;
-
-            var tcs = new TaskCompletionSource<long>();
-            var timeout = Task.Delay(TimeSpan.FromSeconds(30));
-
-            Task TestMessageAsync(SocketMessage arg)
+            _ = Task.Run(async () =>
             {
-                if (arg.Id != message?.Id) return Task.CompletedTask;
-                tcs.SetResult(stopwatch.ElapsedMilliseconds);
-                return Task.CompletedTask;
-            }
+                IUserMessage message;
+                Stopwatch stopwatch;
+                var heartbeat = Context.Client.Latency;
 
-            stopwatch = Stopwatch.StartNew();
-            message = await SendOkAsync($"🏓 heartbeat: {heartbeat}ms: init: ---, rtt: ---");
-            var init = stopwatch.ElapsedMilliseconds;
+                var tcs = new TaskCompletionSource<long>();
+                var timeout = Task.Delay(TimeSpan.FromSeconds(30));
 
-            Context.Client.MessageReceived += TestMessageAsync;
-            var task = await Task.WhenAny(tcs.Task, timeout);
-            Context.Client.MessageReceived -= TestMessageAsync;
-            stopwatch.Stop();
+                Task TestMessageAsync(SocketMessage arg)
+                {
+                    if (arg.Id != message?.Id) return Task.CompletedTask;
+                    tcs.SetResult(stopwatch.ElapsedMilliseconds);
+                    return Task.CompletedTask;
+                }
 
-            if (task == timeout)
-            {
-                await message.ModifyAsync(x => x.Embed = new EmbedBuilder().WithOkColor().WithDescription($"🏓 heartbeat: {heartbeat}ms, init: {init}ms, rtt: timed out").Build());
-            }
-            else
-            {
-                var rtt = await tcs.Task;
-                await message.ModifyAsync(x => x.Embed = new EmbedBuilder().WithOkColor().WithDescription($"🏓 heartbeat: {heartbeat}ms, init: {init}ms, rtt: {rtt}ms").Build());
-            }
+                stopwatch = Stopwatch.StartNew();
+                message = await EmbedAsync(new EmbedBuilder()
+                    .WithOkColor()
+                    .WithTitle("🏓 Pong!")
+                    .WithDescription(
+                        $"Discord API Latency: {heartbeat}ms\nMessage send time: ---\n Message round-trip-time: ---")
+                    .Build());
+                var init = stopwatch.ElapsedMilliseconds;
 
-            return await CommandSuccess();
+                Context.Client.MessageReceived += TestMessageAsync;
+                var task = await Task.WhenAny(tcs.Task, timeout);
+                Context.Client.MessageReceived -= TestMessageAsync;
+                stopwatch.Stop();
+
+                if (task == timeout)
+                {
+                    await message.ModifyAsync(x =>
+                        x.Embed = new EmbedBuilder().WithOkColor()
+                            .WithTitle("🏓 Pong!")
+                            .WithDescription(
+                                $"Discord API Latency: {heartbeat}ms\nMessage send time: {init}ms\n Message round-trip-time: Timed out.")
+                            .Build());
+                }
+                else
+                {
+                    var rtt = await tcs.Task;
+                    await message.ModifyAsync(x =>
+                        x.Embed = new EmbedBuilder().WithOkColor()
+                            .WithTitle("🏓 Pong!")
+                            .WithDescription(
+                                $"Discord API Latency: {heartbeat}ms\nMessage send time: {init}ms\n Message round-trip-time: {rtt}ms")
+                            .Build());
+                }
+            });
+
+            return CommandSuccess();
         }
 
         [Command("help")]
@@ -152,7 +172,7 @@ namespace Administrator.Modules.Info
         [Usage("help", "help commandName")]
         private Task<RuntimeResult> GetHelpAsync(string commandName)
         {
-            var regex = new Regex(Regex.Escape(DbContext.GetPrefixOrDefault(Context.Guild)));
+            var regex = new Regex(Regex.Escape(Context.Database.GetPrefixOrDefault(Context.Guild)));
             commandName = regex.Replace(commandName, string.Empty, 1);
             if (!(Commands.Commands.FirstOrDefault(x =>
                     x.Aliases.Any(y =>
@@ -186,19 +206,19 @@ namespace Administrator.Modules.Info
                 s += $"\nRequires **{bgp:F}** bot permission(s).";
             }
 
-            var summary = command.Summary.Replace("{prefix}", DbContext.GetPrefixOrDefault(Context.Guild))
+            var summary = command.Summary.Replace("{prefix}", Context.Database.GetPrefixOrDefault(Context.Guild))
                 .Replace("{defaultprefix}", BotConfig.Prefix);
-            var remarks = command.Remarks?.Replace("{prefix}", DbContext.GetPrefixOrDefault(Context.Guild))
+            var remarks = command.Remarks?.Replace("{prefix}", Context.Database.GetPrefixOrDefault(Context.Guild))
                 .Replace("{defaultprefix}", BotConfig.Prefix)
                 .Replace("{prefixmaxlength}", BotConfig.PREFIX_MAX_LENGTH.ToString())
                 .Replace("{phraseminlength}", BotConfig.PHRASE_MIN_LENGTH.ToString());
             var usage = string.Join(" or ",
                 (command.Attributes.First(x => x is UsageAttribute) as UsageAttribute)?.Text.Select(x =>
-                    $"`{DbContext.GetPrefixOrDefault(Context.Guild)}{x}`"));
+                    $"`{Context.Database.GetPrefixOrDefault(Context.Guild)}{x}`"));
 
             return CommandSuccess(embed: new EmbedBuilder()
                 .WithOkColor()
-                .WithTitle(string.Join(" / ", command.Aliases.Select(x => $"{DbContext.GetPrefixOrDefault(Context.Guild)}{x}")))
+                .WithTitle(string.Join(" / ", command.Aliases.Select(x => $"{Context.Database.GetPrefixOrDefault(Context.Guild)}{x}")))
                 .WithDescription($"{summary}\n{s}")
                 .AddField("Usage", usage)
                 .WithFooter(remarks)
@@ -213,7 +233,7 @@ namespace Administrator.Modules.Info
                 .WithOkColor()
                 .WithTitle("Available modules")
                 .WithDescription($"```\n{string.Join(", ", Commands.Modules.Where(x => !x.IsSubmodule).Select(x => x.Name))}\n```")
-                .WithFooter($"Use `{DbContext.GetPrefixOrDefault(Context.Guild)}commands moduleName` to get a list of commands for that module.")
+                .WithFooter($"Use `{Context.Database.GetPrefixOrDefault(Context.Guild)}commands moduleName` to get a list of commands for that module.")
                 .Build());
 
         [Command("commands")]
@@ -229,7 +249,7 @@ namespace Administrator.Modules.Info
                 return CommandSuccess(embed: new EmbedBuilder()
                     .WithOkColor()
                     .WithTitle($"Commands for module {modules[0].Name}")
-                    .WithDescription($"```css\n{string.Join("\n", modules.SelectMany(x => x.Commands).DistinctBy(x => x.Name).Select(x => $"{DbContext.GetPrefixOrDefault(Context.Guild)}{x.Name} {(x.Aliases.Count > 1 ? "\n\t" + string.Join("\n\t", x.Aliases.Skip(1).Select(y => $"[{DbContext.GetPrefixOrDefault(Context.Guild)}{y}]")) : string.Empty)}"))}\n```")
+                    .WithDescription($"```css\n{string.Join("\n", modules.SelectMany(x => x.Commands).DistinctBy(x => x.Name).Select(x => $"{Context.Database.GetPrefixOrDefault(Context.Guild)}{x.Name} {(x.Aliases.Count > 1 ? "\n\t" + string.Join("\n\t", x.Aliases.Skip(1).Select(y => $"[{Context.Database.GetPrefixOrDefault(Context.Guild)}{y}]")) : string.Empty)}"))}\n```")
                     .Build());
             }
 

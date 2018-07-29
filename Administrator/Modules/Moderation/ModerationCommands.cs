@@ -25,11 +25,11 @@ namespace Administrator.Modules.Moderation
         [RequireContext(ContextType.DM)]
         private async Task<RuntimeResult> AppealAsync(uint id, [Remainder] string message)
         {
-            if (!(DbContext.Infractions.FirstOrDefault(x => x.ReceiverId == Context.User.Id && x.Id == id) is Infraction
+            if (!(Context.Database.Infractions.FirstOrDefault(x => x.ReceiverId == Context.User.Id && x.Id == id) is Infraction
                 infraction))
                 return await CommandError("No case found by that ID.", "No appeal-able case was found by that ID.");
 
-            var gc = DbContext.GetOrCreateGuildConfig(Context.Client.GetGuild(infraction.GuildId));
+            var gc = Context.Database.GetOrCreateGuildConfig(Context.Client.GetGuild(infraction.GuildId));
             switch (infraction)
             {
                 case Ban ban:
@@ -48,8 +48,8 @@ namespace Administrator.Modules.Moderation
 
                     ban.AppealMessage = message;
                     ban.AppealedTimestamp = DateTimeOffset.UtcNow;
-                    DbContext.Update(ban);
-                    DbContext.SaveChanges();
+                    Context.Database.Update(ban);
+                    Context.Database.SaveChanges();
 
                     if (Context.Client.GetGuild(ban.GuildId)?
                             .GetTextChannel(gc.LogAppealChannelId) is SocketTextChannel c)
@@ -58,7 +58,7 @@ namespace Administrator.Modules.Moderation
                             .WithOkColor()
                             .WithTitle($"Ban - Case #{ban.Id}")
                             .WithDescription($"**{ban.ReceiverName}** (`{ban.ReceiverId}`) has appealed their ban.\n```\n{ban.AppealMessage}\n```")
-                            .WithFooter($"Use `{DbContext.GetPrefixOrDefault(Context.Client.GetGuild(ban.GuildId))}revoke {ban.Id}` to revoke this ban.")
+                            .WithFooter($"Use `{Context.Database.GetPrefixOrDefault(Context.Client.GetGuild(ban.GuildId))}revoke {ban.Id}` to revoke this ban.")
                             .WithTimestamp(ban.AppealedTimestamp)
                             .Build());
                     }
@@ -79,8 +79,8 @@ namespace Administrator.Modules.Moderation
 
                     mute.AppealMessage = message;
                     mute.AppealedTimestamp = DateTimeOffset.UtcNow;
-                    DbContext.Update(mute);
-                    DbContext.SaveChanges();
+                    Context.Database.Update(mute);
+                    Context.Database.SaveChanges();
 
                     if (Context.Client.GetGuild(mute.GuildId)?
                             .GetTextChannel(gc.LogAppealChannelId) is SocketTextChannel ch)
@@ -89,7 +89,7 @@ namespace Administrator.Modules.Moderation
                             .WithOkColor()
                             .WithTitle($"Mute - Case #{mute.Id}")
                             .WithDescription($"**{mute.ReceiverName}** (`{mute.ReceiverId}`) has appealed their mute.\n```\n{mute.AppealMessage}\n```")
-                            .WithFooter($"Use `{DbContext.GetPrefixOrDefault(Context.Client.GetGuild(mute.GuildId))}revoke {mute.Id}` to revoke this mute.")
+                            .WithFooter($"Use `{Context.Database.GetPrefixOrDefault(Context.Client.GetGuild(mute.GuildId))}revoke {mute.Id}` to revoke this mute.")
                             .WithTimestamp(mute.AppealedTimestamp)
                             .Build());
                     }
@@ -130,7 +130,7 @@ namespace Administrator.Modules.Moderation
                     return await CommandError("No reason supplied.", "You must supply a reason.");
                 }
 
-                var ban = DbContext.Add(new Ban
+                var ban = Context.Database.Add(new Ban
                 {
                     ReceiverId = receiver.Id,
                     ReceiverName = receiver.ToString(),
@@ -139,7 +139,7 @@ namespace Administrator.Modules.Moderation
                     Reason = reason,
                     GuildId = Context.Guild.Id
                 }).Entity;
-                DbContext.SaveChanges();
+                Context.Database.SaveChanges();
 
                 await SendErrorAsync($"**{receiver}** has left the server [VAC banned from secure server]");
 
@@ -176,7 +176,7 @@ namespace Administrator.Modules.Moderation
             [RequireBotPermission(GuildPermission.BanMembers)]
             private async Task<RuntimeResult> UnbanUserAsync(ulong receiverId)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 var bans = await Context.Guild.GetBansAsync();
                 if (!(bans.FirstOrDefault(x => x.User.Id == receiverId) is RestBan guildBan))
                 {
@@ -187,15 +187,15 @@ namespace Administrator.Modules.Moderation
                 var logChannel = Context.Guild.GetTextChannel(gc.LogUnbanChannelId) ?? Context.Channel;
                 await Context.Guild.RemoveBanAsync(guildBan.User);
             
-                if (DbContext.Infractions.OfType<Ban>().Where(x => x.GuildId == gc.Id).OrderByDescending(x => x.Id)
+                if (Context.Database.Infractions.OfType<Ban>().Where(x => x.GuildId == gc.Id).OrderByDescending(x => x.Id)
                     .FirstOrDefault(x => x.ReceiverId == receiverId && !x.HasBeenRevoked) is Ban ban)
                 {
                     ban.HasBeenRevoked = true;
                     ban.RevocationTimestamp = DateTimeOffset.UtcNow;
                     ban.RevokerId = Context.User.Id;
                     ban.RevokerName = Context.User.ToString();
-                    DbContext.Update(ban);
-                    DbContext.SaveChanges();
+                    Context.Database.Update(ban);
+                    Context.Database.SaveChanges();
                 
                     await logChannel.EmbedAsync(new EmbedBuilder()
                         .WithWarnColor()
@@ -262,13 +262,13 @@ namespace Administrator.Modules.Moderation
             [RequireUserPermission(GuildPermission.BanMembers | GuildPermission.MuteMembers)]
             private async Task<RuntimeResult> RevokeInfractionAsync(uint id)
             {
-                var infractions = DbContext.Infractions
+                var infractions = Context.Database.Infractions
                     .Where(x => x.GuildId == Context.Guild.Id)
                     .ToList();
 
                 if (infractions.FirstOrDefault(x => x.Id == id) is Infraction infraction)
                 {
-                    var gc = DbContext.GetOrCreateGuildConfig(Context.Client.GetGuild(infraction.GuildId));
+                    var gc = Context.Database.GetOrCreateGuildConfig(Context.Client.GetGuild(infraction.GuildId));
                     switch (infraction)
                     {
                         case Ban ban:
@@ -281,8 +281,8 @@ namespace Administrator.Modules.Moderation
                             ban.RevocationTimestamp = DateTimeOffset.UtcNow;
                             ban.RevokerId = Context.User.Id;
                             ban.ReceiverName = Context.User.ToString();
-                            DbContext.Update(ban);
-                            DbContext.SaveChanges();
+                            Context.Database.Update(ban);
+                            Context.Database.SaveChanges();
                             await Context.Guild.RemoveBanAsync(ban.ReceiverId);
 
                             if (Context.Guild.GetTextChannel(gc.LogBanChannelId) is null)
@@ -331,8 +331,8 @@ namespace Administrator.Modules.Moderation
                                 mute.RevocationTimestamp = DateTimeOffset.UtcNow;
                                 mute.RevokerId = Context.User.Id;
                                 mute.RevokerName = Context.User.ToString();
-                                DbContext.Update(mute);
-                                DbContext.SaveChanges();
+                                Context.Database.Update(mute);
+                                Context.Database.SaveChanges();
                                 await EmbedAsync(new EmbedBuilder()
                                     .WithOkColor()
                                     .WithTitle($"Mute - Case #{mute.Id}")
@@ -582,7 +582,7 @@ namespace Administrator.Modules.Moderation
                     return await CommandError("No reason supplied.", "You must supply a reason.");
                 }
 
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
 
                 if (gc.MuteRole == Functionality.Disable)
                 {
@@ -594,13 +594,13 @@ namespace Administrator.Modules.Moderation
                     return await CommandError("Invalid mute role ID.", "This guild's mute role is not set up or was deleted.");
                 }
 
-                if (DbContext.Infractions.OfType<Mute>().Where(x => x.GuildId == gc.Id).Any(x => !x.HasBeenRevoked && !x.HasExpired && x.ReceiverId == receiver.Id)
+                if (Context.Database.Infractions.OfType<Mute>().Where(x => x.GuildId == gc.Id).Any(x => !x.HasBeenRevoked && !x.HasExpired && x.ReceiverId == receiver.Id)
                     || receiver.Roles.Any(x => x.Id == muteRole.Id))
                 {
                     return await CommandError("Target already muted.", "That user is already muted.");
                 }
 
-                var ent = DbContext.Add(new Mute
+                var ent = Context.Database.Add(new Mute
                 {
                     ReceiverId = receiver.Id,
                     ReceiverName = receiver.ToString(),
@@ -610,8 +610,8 @@ namespace Administrator.Modules.Moderation
                     GuildId = Context.Guild.Id,
                     Duration = (duration > TimeSpan.Zero) ? (TimeSpan?) duration : null
                 });
-                DbContext.SaveChanges();
-                var mute = DbContext.Infractions.OfType<Mute>()
+                Context.Database.SaveChanges();
+                var mute = Context.Database.Infractions.OfType<Mute>()
                     .First(x => x.Id == ent.Entity.Id);
 
                 await SendWarnAsync(
@@ -656,7 +656,7 @@ namespace Administrator.Modules.Moderation
                 return await CommandSuccess();
             }
 
-            [Command("mute", RunMode = RunMode.Async)]
+            [Command("mute")]
             [Summary("Mute a user. You may specify just a reason (for a permanent mute), or a duration and reason.\n" +
                      "You may use `{prefix}mute @SomeUser #somechannel` to mute them from a guild channel or category.")]
             [Remarks("Mutes over 24 hours (including permanent mutes) may be appealed. Single channel mutes will not generate an appeal/case.")]
@@ -777,7 +777,7 @@ namespace Administrator.Modules.Moderation
             [RequireBotPermission(GuildPermission.ManageRoles)]
             private async Task<RuntimeResult> UnmuteUserAsync(SocketGuildUser receiver)
             {
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
                 if (!(Context.Guild.GetRole(gc.MuteRoleId) is SocketRole muteRole))
                 {
                     return await CommandError("Invalid mute role ID.", "This guild's mute role is not set up or was deleted.");
@@ -792,15 +792,15 @@ namespace Administrator.Modules.Moderation
                 await receiver.RemoveRoleAsync(muteRole);
                 var logChannel = Context.Guild.GetTextChannel(gc.LogMuteChannelId) ?? Context.Channel;
             
-                if (DbContext.Infractions.OfType<Mute>().Where(x => x.GuildId == gc.Id).OrderByDescending(x => x.Id)
+                if (Context.Database.Infractions.OfType<Mute>().Where(x => x.GuildId == gc.Id).OrderByDescending(x => x.Id)
                     .FirstOrDefault(x => x.ReceiverId == receiver.Id && !x.HasBeenRevoked) is Mute mute)
                 {
                     mute.HasBeenRevoked = true;
                     mute.RevocationTimestamp = DateTimeOffset.UtcNow;
                     mute.RevokerId = Context.User.Id;
                     mute.RevokerName = Context.User.ToString();
-                    DbContext.Update(mute);
-                    DbContext.SaveChanges();
+                    Context.Database.Update(mute);
+                    Context.Database.SaveChanges();
 
                     await logChannel.EmbedAsync(new EmbedBuilder()
                         .WithOkColor()
@@ -934,23 +934,23 @@ namespace Administrator.Modules.Moderation
                     return await CommandError("No reason supplied.", "You must supply a reason.");
                 }
 
-                var warning = DbContext.Add(new Warning
+                var warning = Context.Database.Add(new Warning
                 {
                     GuildId = Context.Guild.Id,
                     IssuerId = issuer.Id,
                     ReceiverId = receiver.Id
                 }).Entity;
-                DbContext.SaveChanges();
+                Context.Database.SaveChanges();
 
-                var gc = DbContext.GetOrCreateGuildConfig(Context.Guild);
+                var gc = Context.Database.GetOrCreateGuildConfig(Context.Guild);
 
                 var logChannel = Context.Guild.GetTextChannel(gc.LogWarnChannelId) ?? Context.Channel;
 
                 var warnings =
-                    DbContext.Warnings.Where(x => x.ReceiverId == receiver.Id && x.GuildId == Context.Guild.Id)
+                    Context.Database.Warnings.Where(x => x.ReceiverId == receiver.Id && x.GuildId == Context.Guild.Id)
                         .ToList();
                 var warningPunishments =
-                    DbContext.WarningPunishments.Where(x => x.GuildId == Context.Guild.Id).ToList();
+                    Context.Database.WarningPunishments.Where(x => x.GuildId == Context.Guild.Id).ToList();
                 if (warningPunishments.FirstOrDefault(x => x.Count == warnings.Count) is WarningPunishment wp)
                 {
                     switch (wp.Type)
@@ -1023,14 +1023,14 @@ namespace Administrator.Modules.Moderation
             [Usage("warnpl")]
             private Task<RuntimeResult> GetWarningPunishments()
             {
-                if (!DbContext.WarningPunishments.Any(x => x.GuildId == Context.Guild.Id))
+                if (!Context.Database.WarningPunishments.Any(x => x.GuildId == Context.Guild.Id))
                     return CommandError("No punishments found.",
                         "No punishments found on this guild.");
 
                 return CommandSuccess(embed: new EmbedBuilder()
                     .WithOkColor()
                     .WithTitle($"Warning punishments for {Context.Guild.Name}")
-                    .WithDescription(string.Join("\n", DbContext.WarningPunishments
+                    .WithDescription(string.Join("\n", Context.Database.WarningPunishments
                         .Where(x => x.GuildId == Context.Guild.Id)
                         .OrderBy(x => x.Count)
                         .Select(x =>
@@ -1054,7 +1054,7 @@ namespace Administrator.Modules.Moderation
                     return CommandError("Warning count must be greater than zero.",
                         "You cannot apply a punishment for 0 warnings.");
 
-                if (!(DbContext.WarningPunishments
+                if (!(Context.Database.WarningPunishments
                         .FirstOrDefault(x => x.Count == count && x.GuildId == Context.Guild.Id)
                     is WarningPunishment wp))
                 {
@@ -1062,8 +1062,8 @@ namespace Administrator.Modules.Moderation
                         "No punishments exist for that number of warnings.");
                 }
 
-                DbContext.Remove(wp);
-                DbContext.SaveChanges();
+                Context.Database.Remove(wp);
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"I will no longer apply a punishment to users who reach **{count}** warning(s).");
             }
@@ -1084,16 +1084,16 @@ namespace Administrator.Modules.Moderation
                     return CommandError("Warning count must be greater than zero.",
                         "You cannot apply a punishment for 0 warnings.");
 
-                if (DbContext.WarningPunishments.FirstOrDefault(x => x.Count == count && x.GuildId == Context.Guild.Id)
+                if (Context.Database.WarningPunishments.FirstOrDefault(x => x.Count == count && x.GuildId == Context.Guild.Id)
                     is WarningPunishment wp)
                 {
                     wp.Type = type;
                     wp.MuteDuration = null;
-                    DbContext.Update(wp);
+                    Context.Database.Update(wp);
                 }
                 else
                 {
-                    DbContext.Add(new WarningPunishment
+                    Context.Database.Add(new WarningPunishment
                     {
                         GuildId = Context.Guild.Id,
                         Count = count,
@@ -1101,7 +1101,7 @@ namespace Administrator.Modules.Moderation
                     });
                 }
 
-                DbContext.SaveChanges();
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"I will now **{type.ToString().ToLower()}** users who reach **{count}** warning(s).");
             }
@@ -1128,16 +1128,16 @@ namespace Administrator.Modules.Moderation
                     return CommandError("Warning count must be greater than zero.",
                         "You cannot apply a punishment for 0 warnings.");
 
-                if (DbContext.WarningPunishments.FirstOrDefault(x => x.Count == count && x.GuildId == Context.Guild.Id)
+                if (Context.Database.WarningPunishments.FirstOrDefault(x => x.Count == count && x.GuildId == Context.Guild.Id)
                     is WarningPunishment wp)
                 {
                     wp.Type = type;
                     wp.MuteDuration = muteDuration;
-                    DbContext.Update(wp);
+                    Context.Database.Update(wp);
                 }
                 else
                 {
-                    DbContext.Add(new WarningPunishment
+                    Context.Database.Add(new WarningPunishment
                     {
                         GuildId = Context.Guild.Id,
                         Count = count,
@@ -1146,7 +1146,7 @@ namespace Administrator.Modules.Moderation
                     });
                 }
 
-                DbContext.SaveChanges();
+                Context.Database.SaveChanges();
                 return CommandSuccess(
                     $"I will now mute users for **{StringExtensions.FormatTimeSpan(muteDuration)}** upon reaching **{count}** warning(s).");
             }

@@ -79,6 +79,12 @@ namespace Administrator.Common
 
         public static bool TryParse(string input, out TomlEmbed result)
         {
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                result = null;
+                return false;
+            }
+
             try
             {
                 result = Toml.ReadString<TomlEmbed>(input);
